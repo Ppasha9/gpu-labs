@@ -197,6 +197,10 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
                 )
             );
 
+        std::string shaderName = "SampleVertexShader";
+        m_vertexShader->SetPrivateData(WKPDID_D3DDebugObjectName, shaderName.size(),
+            shaderName.c_str());
+
         static const D3D11_INPUT_ELEMENT_DESC vertexDesc [] =
         {
             { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -224,6 +228,10 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
                 &m_pixelShader
                 )
             );
+
+        std::string shaderName = "SamplePixelShader";
+        m_pixelShader->SetPrivateData(WKPDID_D3DDebugObjectName, shaderName.size(),
+            shaderName.c_str());
 
         CD3D11_BUFFER_DESC constantBufferDesc(sizeof(ModelViewProjectionConstantBuffer) , D3D11_BIND_CONSTANT_BUFFER);
         DX::ThrowIfFailed(
@@ -263,6 +271,10 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
                 &m_vertexBuffer
                 )
             );
+
+        std::string modelName = "Cube";
+        m_vertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName, modelName.size(),
+            modelName.c_str());
 
         // Load mesh indices. Each trio of indices represents
         // a triangle to be rendered on the screen.
