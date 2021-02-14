@@ -202,6 +202,12 @@ void DX::DeviceResources::CreateDeviceResources()
         context.As(&m_d3dContext)
         );
 
+    // Create annotations
+    DX::ThrowIfFailed(
+        m_d3dContext->QueryInterface(__uuidof(m_annotation.Get()),
+            reinterpret_cast<void**>(m_annotation.GetAddressOf()))
+        );
+
     // Create the Direct2D device object and a corresponding context.
     ComPtr<IDXGIDevice3> dxgiDevice;
     DX::ThrowIfFailed(
