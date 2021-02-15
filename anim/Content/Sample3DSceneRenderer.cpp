@@ -127,7 +127,9 @@ void Sample3DSceneRenderer::Render()
         nullptr,
         0
     );
+    annotation->EndEvent();
 
+    annotation->BeginEvent(L"RenderCube");
     // Draw the objects.
     context->DrawIndexed(
         (UINT)m_indexCount,
