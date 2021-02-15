@@ -70,6 +70,10 @@ void Sample3DSceneRenderer::Render()
 {
     auto context = m_deviceResources->GetD3DDeviceContext();
 
+    auto annotation = m_deviceResources->GetAnnotation();
+
+    annotation->BeginEvent(L"SetCubeGeometry");
+
     // Prepare the constant buffer to send it to the graphics device.
     context->UpdateSubresource(
         m_constantBuffer.Get(),
@@ -100,7 +104,9 @@ void Sample3DSceneRenderer::Render()
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     context->IASetInputLayout(m_inputLayout.Get());
+    annotation->EndEvent();
 
+    annotation->BeginEvent(L"AttachShaders");
     // Attach our vertex shader.
     context->VSSetShader(
         m_vertexShader.Get(),
@@ -128,6 +134,7 @@ void Sample3DSceneRenderer::Render()
         0,
         0
     );
+    annotation->EndEvent();
 }
 
 void Sample3DSceneRenderer::CreateDeviceDependentResources()
