@@ -173,7 +173,7 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
     m_d2dContext->SetTarget(nullptr);
     m_d2dTargetBitmap = nullptr;
     m_d3dDepthStencilView = nullptr;
-    m_d3dContext->Flush1(D3D11_CONTEXT_TYPE_ALL, nullptr);
+    m_d3dContext->Flush();
 
     if (m_swapChain != nullptr)
     {
@@ -191,20 +191,21 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
     else
     {
         // Otherwise, create a new one using the same adapter as the existing Direct3D device.
-        DXGI_SWAP_CHAIN_DESC1 swapChainDesc = { 0 };
+        DXGI_SWAP_CHAIN_DESC swapChainDesc = { 0 };
 
-        swapChainDesc.Width = lround(m_logicalSize.Width);        // Match the size of the window.
-        swapChainDesc.Height = lround(m_logicalSize.Height);
-        swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;                // This is the most common swap chain format.
-        swapChainDesc.Stereo = false;
+        swapChainDesc.BufferDesc.Width = lround(m_logicalSize.Width);        // Match the size of the window.
+        swapChainDesc.BufferDesc.Height = lround(m_logicalSize.Height);
+        swapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;                // This is the most common swap chain format.
+        swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
+        swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
         swapChainDesc.SampleDesc.Count = 1;                                // Don't use multi-sampling.
         swapChainDesc.SampleDesc.Quality = 0;
         swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         swapChainDesc.BufferCount = 2;                                    // Use double-buffering to minimize latency.
         swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;    // All Windows Store apps must use this SwapEffect.
         swapChainDesc.Flags = 0;
-        swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
-        swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+        swapChainDesc.OutputWindow = m_hwnd;
+        swapChainDesc.Windowed = TRUE;
 
         // This sequence obtains the DXGI factory that was used to create the Direct3D device above.
         ComPtr<IDXGIDevice3> dxgiDevice;
@@ -222,30 +223,23 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory))
             );
 
-        ComPtr<IDXGISwapChain1> swapChain;
         DX::ThrowIfFailed(
-            dxgiFactory->CreateSwapChainForHwnd(
+            dxgiFactory->CreateSwapChain(
                 m_d3dDevice.Get(),
-                m_hwnd,
                 &swapChainDesc,
-                nullptr,
-                nullptr,
-                &swapChain
+                &m_swapChain
             )
-        );
-        DX::ThrowIfFailed(
-            swapChain.As(&m_swapChain)
         );
     }
 
     // Create a render target view of the swap chain back buffer.
-    ComPtr<ID3D11Texture2D1> backBuffer;
+    ComPtr<ID3D11Texture2D> backBuffer;
     DX::ThrowIfFailed(
         m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer))
         );
 
     DX::ThrowIfFailed(
-        m_d3dDevice->CreateRenderTargetView1(
+        m_d3dDevice->CreateRenderTargetView(
             backBuffer.Get(),
             nullptr,
             &m_d3dRenderTargetView
@@ -253,7 +247,7 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
         );
 
     // Create a depth stencil view for use with 3D rendering if needed.
-    CD3D11_TEXTURE2D_DESC1 depthStencilDesc(
+    CD3D11_TEXTURE2D_DESC depthStencilDesc(
         DXGI_FORMAT_D24_UNORM_S8_UINT, 
         lround(m_logicalSize.Width),
         lround(m_logicalSize.Height),
@@ -262,9 +256,9 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
         D3D11_BIND_DEPTH_STENCIL
         );
 
-    ComPtr<ID3D11Texture2D1> depthStencil;
+    ComPtr<ID3D11Texture2D> depthStencil;
     DX::ThrowIfFailed(
-        m_d3dDevice->CreateTexture2D1(
+        m_d3dDevice->CreateTexture2D(
             &depthStencilDesc,
             nullptr,
             &depthStencil
@@ -298,7 +292,7 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)
             );
 
-    ComPtr<IDXGISurface2> dxgiBackBuffer;
+    ComPtr<IDXGISurface> dxgiBackBuffer;
     DX::ThrowIfFailed(
         m_swapChain->GetBuffer(0, IID_PPV_ARGS(&dxgiBackBuffer))
         );
@@ -310,6 +304,13 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d2dTargetBitmap
             )
         );
+    //DX::ThrowIfFailed(
+    //    m_d2dContext->CreateBitmapFromDxgiSurface(
+    //        dxgiBackBuffer.Get(),
+    //        &bitmapProperties,
+    //        &m_d2dTargetBitmap
+    //        )
+    //    );
 
     m_d2dContext->SetTarget(m_d2dTargetBitmap.Get());
 
@@ -346,16 +347,7 @@ void DX::DeviceResources::Present()
     // The first argument instructs DXGI to block until VSync, putting the application
     // to sleep until the next VSync. This ensures we don't waste any cycles rendering
     // frames that will never be displayed to the screen.
-    DXGI_PRESENT_PARAMETERS parameters = { 0 };
-    HRESULT hr = m_swapChain->Present1(1, 0, &parameters);
-
-    // Discard the contents of the render target.
-    // This is a valid operation only when the existing contents will be entirely
-    // overwritten. If dirty or scroll rects are used, this call should be removed.
-    m_d3dContext->DiscardView1(m_d3dRenderTargetView.Get(), nullptr, 0);
-
-    // Discard the contents of the depth stencil.
-    m_d3dContext->DiscardView1(m_d3dDepthStencilView.Get(), nullptr, 0);
+    HRESULT hr = m_swapChain->Present(1, 0);
 
     DX::ThrowIfFailed(hr);
 }
