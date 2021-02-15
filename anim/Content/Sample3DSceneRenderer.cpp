@@ -133,13 +133,28 @@ void Sample3DSceneRenderer::Render()
 void Sample3DSceneRenderer::CreateDeviceDependentResources()
 {
     // Load shaders
+    std::vector<byte> vsData, psData;
+
+    bool success = false;
+    try
+    {
 #ifdef _DEBUG
-    auto vsData = DX::ReadData("x64\\Debug\\SampleVertexShader.cso");
-    auto psData = DX::ReadData("x64\\Debug\\SamplePixelShader.cso");
+        vsData = DX::ReadData("x64\\Debug\\SampleVertexShader.cso");
+        psData = DX::ReadData("x64\\Debug\\SamplePixelShader.cso");
 #else
-    auto vsData = DX::ReadData("x64\\Release\\SampleVertexShader.cso");
-    auto psData = DX::ReadData("x64\\Release\\SamplePixelShader.cso");
+        vsData = DX::ReadData("x64\\Release\\SampleVertexShader.cso");
+        psData = DX::ReadData("x64\\Release\\SamplePixelShader.cso");
 #endif // DEBUG
+        success = true;
+    }
+    catch (std::exception&)
+    {
+    }
+    if (!success)
+    {
+        vsData = DX::ReadData("SampleVertexShader.cso");
+        psData = DX::ReadData("SamplePixelShader.cso");
+    }
 
     // After the vertex shader file is loaded, create the shader and input layout.
     DX::ThrowIfFailed(
