@@ -32,5 +32,5 @@
 *.app
 
 anim/.vs/*
-anim/Debug/*
-anim/Release/*
+anim/x64/*
+*.user

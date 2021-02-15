@@ -3,17 +3,12 @@
 #include "Common\DirectXHelper.h"
 
 using namespace anim;
-using namespace Windows::Foundation;
-using namespace Windows::System::Threading;
 using namespace Concurrency;
 
 // Loads and initializes application assets when the application is loaded.
-animMain::animMain(const std::shared_ptr<DX::DeviceResources>& deviceResources) :
+AnimMain::AnimMain(const std::shared_ptr<DX::DeviceResources>& deviceResources) :
     m_deviceResources(deviceResources)
 {
-    // Register to be notified if the Device is lost or recreated
-    m_deviceResources->RegisterDeviceNotify(this);
-
     // TODO: Replace this with your app's content initialization.
     m_sceneRenderer = std::unique_ptr<Sample3DSceneRenderer>(new Sample3DSceneRenderer(m_deviceResources));
 
@@ -27,21 +22,20 @@ animMain::animMain(const std::shared_ptr<DX::DeviceResources>& deviceResources) 
     */
 }
 
-animMain::~animMain()
+AnimMain::~AnimMain()
 {
-    // Deregister device notification
-    m_deviceResources->RegisterDeviceNotify(nullptr);
 }
 
 // Updates application state when the window size changes (e.g. device orientation change)
-void animMain::CreateWindowSizeDependentResources() 
+void AnimMain::CreateWindowSizeDependentResources() 
 {
     // TODO: Replace this with the size-dependent initialization of your app's content.
     m_sceneRenderer->CreateWindowSizeDependentResources();
 }
 
 // Updates the application state once per frame.
-void animMain::Update() 
+
+void AnimMain::Update()
 {
     // Update scene objects.
     m_timer.Tick([&]()
@@ -54,7 +48,7 @@ void animMain::Update()
 
 // Renders the current frame according to the current application state.
 // Returns true if the frame was rendered and is ready to be displayed.
-bool animMain::Render() 
+bool AnimMain::Render() 
 {
     // Don't try to render anything before the first Update.
     if (m_timer.GetFrameCount() == 0)
@@ -82,19 +76,4 @@ bool animMain::Render()
     m_fpsTextRenderer->Render();
 
     return true;
-}
-
-// Notifies renderers that device resources need to be released.
-void animMain::OnDeviceLost()
-{
-    m_sceneRenderer->ReleaseDeviceDependentResources();
-    m_fpsTextRenderer->ReleaseDeviceDependentResources();
-}
-
-// Notifies renderers that device resources may now be recreated.
-void animMain::OnDeviceRestored()
-{
-    m_sceneRenderer->CreateDeviceDependentResources();
-    m_fpsTextRenderer->CreateDeviceDependentResources();
-    CreateWindowSizeDependentResources();
 }

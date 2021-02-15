@@ -4,47 +4,27 @@
 #include "Common\DeviceResources.h"
 #include "animMain.h"
 
+
 namespace anim
 {
-    // Main entry point for our app. Connects the app with the Windows shell and handles application lifecycle events.
-    ref class App sealed : public Windows::ApplicationModel::Core::IFrameworkView
+    class App
     {
     public:
-        App();
-
-        // IFrameworkView Methods.
-        virtual void Initialize(Windows::ApplicationModel::Core::CoreApplicationView^ applicationView);
-        virtual void SetWindow(Windows::UI::Core::CoreWindow^ window);
-        virtual void Load(Platform::String^ entryPoint);
-        virtual void Run();
-        virtual void Uninitialize();
-
-    protected:
-        // Application lifecycle event handlers.
-        void OnActivated(Windows::ApplicationModel::Core::CoreApplicationView^ applicationView, Windows::ApplicationModel::Activation::IActivatedEventArgs^ args);
-        void OnSuspending(Platform::Object^ sender, Windows::ApplicationModel::SuspendingEventArgs^ args);
-        void OnResuming(Platform::Object^ sender, Platform::Object^ args);
-
-        // Window event handlers.
-        void OnWindowSizeChanged(Windows::UI::Core::CoreWindow^ sender, Windows::UI::Core::WindowSizeChangedEventArgs^ args);
-        void OnVisibilityChanged(Windows::UI::Core::CoreWindow^ sender, Windows::UI::Core::VisibilityChangedEventArgs^ args);
-        void OnWindowClosed(Windows::UI::Core::CoreWindow^ sender, Windows::UI::Core::CoreWindowEventArgs^ args);
-
-        // DisplayInformation event handlers.
-        void OnDpiChanged(Windows::Graphics::Display::DisplayInformation^ sender, Platform::Object^ args);
-        void OnOrientationChanged(Windows::Graphics::Display::DisplayInformation^ sender, Platform::Object^ args);
-        void OnDisplayContentsInvalidated(Windows::Graphics::Display::DisplayInformation^ sender, Platform::Object^ args);
+        static App& getInstance();
+        int run(HINSTANCE hInstance, int nCmdShow);
 
     private:
+        App();
+        App(const App&) = delete;
+        App &operator=(const App&) = delete;
+
+        HRESULT InitializeWindow(HINSTANCE hInstance, int nCmdShow);
+        static LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+        
+        void OnWindowSizeChanged(const DX::Size& newSize);
+
         std::shared_ptr<DX::DeviceResources> m_deviceResources;
-        std::unique_ptr<animMain> m_main;
-        bool m_windowClosed;
-        bool m_windowVisible;
+        std::unique_ptr<AnimMain> m_main;
+        HWND m_hwnd;
     };
 }
-
-ref class Direct3DApplicationSource sealed : Windows::ApplicationModel::Core::IFrameworkViewSource
-{
-public:
-    virtual Windows::ApplicationModel::Core::IFrameworkView^ CreateView();
-};

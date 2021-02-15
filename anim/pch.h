@@ -1,5 +1,8 @@
 ﻿#pragma once
 
+#include <fstream>
+#include <comdef.h>
+#include <vector>
 #include <wrl.h>
 #include <wrl/client.h>
 #include <dxgi1_4.h>
@@ -11,5 +14,5 @@
 #include <DirectXColors.h>
 #include <DirectXMath.h>
 #include <memory>
-#include <agile.h>
+//#include <agile.h>
 #include <concrt.h>

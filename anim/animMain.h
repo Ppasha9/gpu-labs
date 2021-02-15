@@ -8,18 +8,14 @@
 // Renders Direct2D and 3D content on the screen.
 namespace anim
 {
-    class animMain : public DX::IDeviceNotify
+    class AnimMain
     {
     public:
-        animMain(const std::shared_ptr<DX::DeviceResources>& deviceResources);
-        ~animMain();
+        AnimMain(const std::shared_ptr<DX::DeviceResources>& deviceResources);
+        ~AnimMain();
         void CreateWindowSizeDependentResources();
         void Update();
         bool Render();
-
-        // IDeviceNotify
-        virtual void OnDeviceLost();
-        virtual void OnDeviceRestored();
 
     private:
         // Cached pointer to device resources.
