@@ -245,6 +245,9 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d3dRenderTargetView
             )
         );
+    std::string name = "BackBufferRenderTargetView";
+    m_d3dRenderTargetView->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
+        name.c_str());
 
     // Create a depth stencil view for use with 3D rendering if needed.
     CD3D11_TEXTURE2D_DESC depthStencilDesc(
@@ -273,7 +276,70 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d3dDepthStencilView
             )
         );
-    
+
+    // Create post-proccessing render target view
+    CD3D11_TEXTURE2D_DESC postProcTextureDesc(
+        DXGI_FORMAT_B8G8R8A8_UNORM,
+        lround(m_logicalSize.Width),
+        lround(m_logicalSize.Height),
+        1, // Only one texture.
+        1, // Use a single mipmap level.
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE
+    );
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateTexture2D(
+            &postProcTextureDesc,
+            nullptr,
+            &m_postProcTexture
+        )
+    );
+    name = "PostProcTexture";
+    m_postProcTexture->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
+        name.c_str());
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateShaderResourceView(
+            m_postProcTexture.Get(),
+            nullptr,
+            &m_postProcShaderResView
+        )
+    );
+    name = "PostProcShaderResourceView";
+    m_postProcShaderResView->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
+        name.c_str());
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateRenderTargetView(
+            m_postProcTexture.Get(),
+            nullptr,
+            &m_d3dPPRenderTargetView
+        )
+    );
+    name = "PostProcRenderTargetView";
+    m_d3dPPRenderTargetView->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
+        name.c_str());
+
+    // Create sampler state
+    D3D11_SAMPLER_DESC samplerDesc;
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.MipLODBias = 0.0f;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+    samplerDesc.BorderColor[0] = 0;
+    samplerDesc.BorderColor[1] = 0;
+    samplerDesc.BorderColor[2] = 0;
+    samplerDesc.BorderColor[3] = 0;
+    samplerDesc.MinLOD = 0;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateSamplerState(&samplerDesc, &m_samplerState)
+    );
+
     // Set the 3D rendering viewport to target the entire window.
     m_screenViewport = CD3D11_VIEWPORT(
         0.0f,
@@ -304,13 +370,6 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d2dTargetBitmap
             )
         );
-    //DX::ThrowIfFailed(
-    //    m_d2dContext->CreateBitmapFromDxgiSurface(
-    //        dxgiBackBuffer.Get(),
-    //        &bitmapProperties,
-    //        &m_d2dTargetBitmap
-    //        )
-    //    );
 
     m_d2dContext->SetTarget(m_d2dTargetBitmap.Get());
 

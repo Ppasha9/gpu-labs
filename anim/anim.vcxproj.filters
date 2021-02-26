@@ -79,5 +79,11 @@
     <FxCompile Include="Content\SampleVertexShader.hlsl">
       <Filter>Source Files\Content</Filter>
     </FxCompile>
+    <FxCompile Include="PostProcVertexShader.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="PostProcPixelShader.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

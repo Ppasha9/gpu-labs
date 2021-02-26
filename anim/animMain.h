@@ -27,5 +27,9 @@ namespace anim
 
         // Rendering loop timer.
         DX::StepTimer m_timer;
+
+        // Post-proccessing shaders
+        Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pixelShader;
     };
 }
