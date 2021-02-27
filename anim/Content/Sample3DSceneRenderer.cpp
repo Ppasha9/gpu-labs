@@ -24,7 +24,7 @@ Sample3DSceneRenderer::Sample3DSceneRenderer(const std::shared_ptr<DX::DeviceRes
 void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 {
     DX::Size outputSize = m_deviceResources->GetLogicalSize();
-    float aspectRatio = outputSize.Width / outputSize.Height;
+    float aspectRatio = outputSize.width / outputSize.height;
     float fovAngleY = 70.0f * XM_PI / 180.0f;
 
     XMMATRIX perspectiveMatrix = XMMatrixPerspectiveFovRH(

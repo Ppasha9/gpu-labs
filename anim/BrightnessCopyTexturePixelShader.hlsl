@@ -11,8 +11,6 @@ struct PixelShaderInput
 float4 main(PixelShaderInput input) : SV_TARGET
 {
     float4 textureColor = shaderTexture.Sample(samplerState, input.texcoord);
-
-    return textureColor;
-    // return float4(input.texcoord.x, input.texcoord.y, 0, 1);
-    // return float4(1,0,0,1); //the red color
+    float l = max(max(textureColor.r, textureColor.g), textureColor.b);
+    return log(l) + 1;
 }

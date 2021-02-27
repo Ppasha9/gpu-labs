@@ -11,7 +11,7 @@ using namespace Microsoft::WRL;
 DX::DeviceResources::DeviceResources() :
     m_screenViewport(),
     m_d3dFeatureLevel(D3D_FEATURE_LEVEL_9_1),
-    m_logicalSize()
+    m_logicalSize(1, 1)
 {
     CreateDeviceIndependentResources();
     CreateDeviceResources();
@@ -181,8 +181,8 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
         DX::ThrowIfFailed(
             m_swapChain->ResizeBuffers(
                 2, // Double-buffered swap chain.
-                lround(m_logicalSize.Width),
-                lround(m_logicalSize.Height),
+                lround(m_logicalSize.width),
+                lround(m_logicalSize.height),
                 DXGI_FORMAT_B8G8R8A8_UNORM,
                 0
                 )
@@ -193,8 +193,8 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
         // Otherwise, create a new one using the same adapter as the existing Direct3D device.
         DXGI_SWAP_CHAIN_DESC swapChainDesc = { 0 };
 
-        swapChainDesc.BufferDesc.Width = lround(m_logicalSize.Width);        // Match the size of the window.
-        swapChainDesc.BufferDesc.Height = lround(m_logicalSize.Height);
+        swapChainDesc.BufferDesc.Width = lround(m_logicalSize.width);        // Match the size of the window.
+        swapChainDesc.BufferDesc.Height = lround(m_logicalSize.height);
         swapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;                // This is the most common swap chain format.
         swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
         swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
@@ -252,8 +252,8 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
     // Create a depth stencil view for use with 3D rendering if needed.
     CD3D11_TEXTURE2D_DESC depthStencilDesc(
         DXGI_FORMAT_D24_UNORM_S8_UINT, 
-        lround(m_logicalSize.Width),
-        lround(m_logicalSize.Height),
+        lround(m_logicalSize.width),
+        lround(m_logicalSize.height),
         1, // This depth stencil view has only one texture.
         1, // Use a single mipmap level.
         D3D11_BIND_DEPTH_STENCIL
@@ -276,49 +276,6 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d3dDepthStencilView
             )
         );
-
-    // Create post-proccessing render target view
-    CD3D11_TEXTURE2D_DESC postProcTextureDesc(
-        DXGI_FORMAT_B8G8R8A8_UNORM,
-        lround(m_logicalSize.Width),
-        lround(m_logicalSize.Height),
-        1, // Only one texture.
-        1, // Use a single mipmap level.
-        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE
-    );
-
-    DX::ThrowIfFailed(
-        m_d3dDevice->CreateTexture2D(
-            &postProcTextureDesc,
-            nullptr,
-            &m_postProcTexture
-        )
-    );
-    name = "PostProcTexture";
-    m_postProcTexture->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
-        name.c_str());
-
-    DX::ThrowIfFailed(
-        m_d3dDevice->CreateShaderResourceView(
-            m_postProcTexture.Get(),
-            nullptr,
-            &m_postProcShaderResView
-        )
-    );
-    name = "PostProcShaderResourceView";
-    m_postProcShaderResView->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
-        name.c_str());
-
-    DX::ThrowIfFailed(
-        m_d3dDevice->CreateRenderTargetView(
-            m_postProcTexture.Get(),
-            nullptr,
-            &m_d3dPPRenderTargetView
-        )
-    );
-    name = "PostProcRenderTargetView";
-    m_d3dPPRenderTargetView->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
-        name.c_str());
 
     // Create sampler state
     D3D11_SAMPLER_DESC samplerDesc;
@@ -344,8 +301,8 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
     m_screenViewport = CD3D11_VIEWPORT(
         0.0f,
         0.0f,
-        m_logicalSize.Width,
-        m_logicalSize.Height
+        m_logicalSize.width,
+        m_logicalSize.height
         );
 
     m_d3dContext->RSSetViewports(1, &m_screenViewport);
@@ -409,4 +366,78 @@ void DX::DeviceResources::Present()
     HRESULT hr = m_swapChain->Present(1, 0);
 
     DX::ThrowIfFailed(hr);
+}
+
+Microsoft::WRL::ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader(
+    const std::string &namePrefix) const
+{
+    ID3D11PixelShader *output;
+
+    std::vector<byte> data;
+    bool success = false;
+    try
+    {
+#ifdef _DEBUG
+        data = DX::ReadData("x64\\Debug\\" + namePrefix + "PixelShader.cso");
+#else
+        data = DX::ReadData("x64\\Release\\" + namePrefix + "PixelShader.cso");
+#endif // DEBUG
+        success = true;
+    }
+    catch (std::exception &)
+    {
+    }
+    if (!success)
+        data = DX::ReadData(namePrefix + "PixelShader.cso");
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreatePixelShader(
+            data.data(),
+            data.size(),
+            nullptr,
+            &output
+        )
+    );
+    std::string shaderName = namePrefix + "PixelShader";
+    output->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)shaderName.size(),
+        shaderName.c_str());
+
+    return output;
+}
+
+Microsoft::WRL::ComPtr<ID3D11VertexShader> DX::DeviceResources::createVertexShader(
+    const std::string &namePrefix) const
+{
+    ID3D11VertexShader *output;
+
+    std::vector<byte> data;
+    bool success = false;
+    try
+    {
+#ifdef _DEBUG
+        data = DX::ReadData("x64\\Debug\\" + namePrefix + "VertexShader.cso");
+#else
+        data = DX::ReadData("x64\\Release\\" + namePrefix + "VertexShader.cso");
+#endif // DEBUG
+        success = true;
+    }
+    catch (std::exception &)
+    {
+    }
+    if (!success)
+        data = DX::ReadData(namePrefix + "VertexShader.cso");
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateVertexShader(
+            data.data(),
+            data.size(),
+            nullptr,
+            &output
+        )
+    );
+    std::string shaderName = namePrefix + "VertexShader";
+    output->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)shaderName.size(),
+        shaderName.c_str());
+
+    return output;
 }

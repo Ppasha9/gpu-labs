@@ -4,17 +4,34 @@ namespace DX
 {
     struct Size
     {
-        float Height;
-        float Width;
+        float height;
+        float width;
 
         bool operator==(const Size& other) const
         {
-            return Height == other.Height && Width == other.Width;
+            return height == other.height && width == other.width;
         }
 
         bool operator!=(const Size& other) const
         {
             return !(*this == other);
+        }
+
+        Size &operator=(const Size &other)
+        {
+            width = max(other.width, 1);
+            height = max(other.height, 1);
+
+            return *this;
+        }
+
+        Size(float height, float width) : width(max(width, 1)), height(max(height, 1))
+        {
+        }
+
+        Size(const Size &other)
+        {
+            *this = other;
         }
     };
 
@@ -27,6 +44,11 @@ namespace DX
         void SetLogicalSize(Size logicalSize);
         void Present();
 
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> createPixelShader(
+            const std::string &namePrefix) const;
+        Microsoft::WRL::ComPtr<ID3D11VertexShader> createVertexShader(
+            const std::string &namePrefix) const;
+
         // The size of the render target, in dips.
         Size GetLogicalSize() const { return m_logicalSize; }
 
@@ -36,8 +58,6 @@ namespace DX
         IDXGISwapChain*           GetSwapChain() const { return m_swapChain.Get(); }
         D3D_FEATURE_LEVEL          GetDeviceFeatureLevel() const { return m_d3dFeatureLevel; }
         ID3D11RenderTargetView*   GetBackBufferRenderTargetView() const { return m_d3dRenderTargetView.Get(); }
-        ID3D11RenderTargetView*   GetPostProccessingRenderTargetView() const { return m_d3dPPRenderTargetView.Get(); }
-        ID3D11ShaderResourceView* const * GetPostProccessingShaderResourceView() const { return m_postProcShaderResView.GetAddressOf(); }
         ID3D11DepthStencilView*    GetDepthStencilView() const { return m_d3dDepthStencilView.Get(); }
         D3D11_VIEWPORT             GetScreenViewport() const { return m_screenViewport; }
         ID3DUserDefinedAnnotation* GetAnnotation() const { return m_annotation.Get(); }
@@ -66,10 +86,7 @@ namespace DX
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_d3dRenderTargetView;
         Microsoft::WRL::ComPtr<ID3D11DepthStencilView> m_d3dDepthStencilView;
         D3D11_VIEWPORT                                 m_screenViewport;
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> m_postProcTexture;
-        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_d3dPPRenderTargetView;
-        Microsoft::WRL::ComPtr<ID3D11SamplerState> m_samplerState;
-        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_postProcShaderResView;
+        Microsoft::WRL::ComPtr<ID3D11SamplerState>     m_samplerState;
 
         // Direct2D drawing components.
         Microsoft::WRL::ComPtr<ID2D1Factory3>       m_d2dFactory;
