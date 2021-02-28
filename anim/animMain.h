@@ -38,14 +38,29 @@ namespace anim
 
         // Post-proccessing shaders
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
-        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pixelCopyShader;
-        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pixelBrightnessShader;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_copyPixelShader;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_brightnessPixelShader;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_hdrPixelShader;
 
         // Scene render target
         RenderTargetTexture m_sceneRenderTarget;
 
         // Render targets of decreasing sizes used to calculate frame average brightness
         std::vector<RenderTargetTexture> m_averagingRenderTargets;
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> m_averageBrightnessTexture;
+        D3D11_MAPPED_SUBRESOURCE m_averageBrightnessAccessor;
+
+        // Post-proccessing constant buffer
+        Microsoft::WRL::ComPtr<ID3D11Buffer> m_constantBuffer;
+        struct PostProcConstBuffer
+        {
+            float averageBrightness;
+            float dummy[3];
+        } m_postProcData;
+
+        float m_adaptedAverageBrightness;
+        float m_adaptationTime = 2;
 
         // Create texture of given size and bind it as render target and shader resource
         RenderTargetTexture createRenderTargetTexture(const DX::Size &size,

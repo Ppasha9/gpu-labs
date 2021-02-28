@@ -7,14 +7,49 @@ using namespace Concurrency;
 
 // Loads and initializes application assets when the application is loaded.
 AnimMain::AnimMain(const std::shared_ptr<DX::DeviceResources>& deviceResources) :
-    m_deviceResources(deviceResources)
+    m_deviceResources(deviceResources), m_adaptedAverageBrightness(0)
 {
     m_sceneRenderer = std::unique_ptr<Sample3DSceneRenderer>(new Sample3DSceneRenderer(m_deviceResources));
     m_fpsTextRenderer = std::unique_ptr<SampleFpsTextRenderer>(new SampleFpsTextRenderer(m_deviceResources));
 
     m_vertexShader = deviceResources->createVertexShader("CopyTexture");
-    m_pixelCopyShader = deviceResources->createPixelShader("CopyTexture");
-    m_pixelBrightnessShader = deviceResources->createPixelShader("BrightnessCopyTexture");
+    m_copyPixelShader = deviceResources->createPixelShader("CopyTexture");
+    m_brightnessPixelShader = deviceResources->createPixelShader("BrightnessCopyTexture");
+    m_hdrPixelShader = deviceResources->createPixelShader("HDR");
+
+    // Create post-proccessing constant buffer
+    CD3D11_BUFFER_DESC constantBufferDesc(sizeof(PostProcConstBuffer),
+        D3D11_BIND_CONSTANT_BUFFER);
+    DX::ThrowIfFailed(
+        m_deviceResources->GetD3DDevice()->CreateBuffer(
+            &constantBufferDesc,
+            nullptr,
+            &m_constantBuffer
+        )
+    );
+
+    // Create 1x1 average brightness texture accessible via CPU
+    CD3D11_TEXTURE2D_DESC postProcTextureDesc(
+        DXGI_FORMAT_B8G8R8A8_UNORM,
+        1, // width
+        1, // height
+        1, // Only one texture.
+        1, // Use a single mipmap level.
+        0,
+        D3D11_USAGE_STAGING,
+        D3D11_CPU_ACCESS_READ
+    );
+
+    DX::ThrowIfFailed(
+        m_deviceResources->GetD3DDevice()->CreateTexture2D(
+            &postProcTextureDesc,
+            nullptr,
+            &m_averageBrightnessTexture
+        )
+    );
+    std::string name = "AverageBrightnessTexture";
+    m_averageBrightnessTexture->SetPrivateData(WKPDID_D3DDebugObjectName,
+        (UINT)name.size(), name.c_str());
 }
 
 AnimMain::~AnimMain()
@@ -172,13 +207,13 @@ bool AnimMain::Render()
     // Attach copy texture vertex shader
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
     // Attach calculate brightness and copy texture pixel shader
-    context->PSSetShader(m_pixelBrightnessShader.Get(), nullptr, 0);
+    context->PSSetShader(m_brightnessPixelShader.Get(), nullptr, 0);
 
     // Copy scene texture to first averaging texture
     copyTexture(m_sceneRenderTarget, m_averagingRenderTargets.front());
 
     // Continuously copy to smaller textures
-    context->PSSetShader(m_pixelCopyShader.Get(), nullptr, 0);
+    context->PSSetShader(m_copyPixelShader.Get(), nullptr, 0);
     for (size_t i = 1; i < m_averagingRenderTargets.size(); i++)
         copyTexture(m_averagingRenderTargets[i - 1], m_averagingRenderTargets[i]);
     annotation->EndEvent(); // Calculate frame average brightness
@@ -191,15 +226,29 @@ bool AnimMain::Render()
     auto viewport = m_deviceResources->GetScreenViewport();
     context->RSSetViewports(1, &viewport);
     // Attach HDR shader
-    /// ...
-    // Set constant buffer parameters
-    /// ...
-    // Set 1x1 texture with frame average intensity as shader resource
-    ID3D11ShaderResourceView * const textures[2] = {
-        m_sceneRenderTarget.shaderResourceView.Get(),
-        m_averagingRenderTargets.back().shaderResourceView.Get()
-    };
-    context->PSSetShaderResources(0, 2, textures);
+    context->PSSetShader(m_hdrPixelShader.Get(), nullptr, 0);
+    // Calculate adapted average brightness
+    context->CopyResource(m_averageBrightnessTexture.Get(),
+        m_averagingRenderTargets.back().texture.Get());
+    DX::ThrowIfFailed(
+        context->Map(
+            m_averageBrightnessTexture.Get(),
+            0,
+            D3D11_MAP_READ,
+            0,
+            &m_averageBrightnessAccessor
+        )
+    );
+    float averageBrightness = (*(BYTE *)m_averageBrightnessAccessor.pData) / 255.0f;
+    m_adaptedAverageBrightness += (averageBrightness - m_adaptedAverageBrightness) *
+        (float)(1 - std::exp(-m_timer.GetElapsedSeconds() / m_adaptationTime));
+    //Set constant buffer parameter
+    m_postProcData.averageBrightness = m_adaptedAverageBrightness;
+    context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL,
+        &m_postProcData, 0, 0);
+    context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+    // Set scene texture as shader resource
+    context->PSSetShaderResources(0, 1, m_sceneRenderTarget.shaderResourceView.GetAddressOf());
     // Render full-screen quad
     context->Draw(4, 0);
     annotation->EndEvent(); // Render with HDR to screen
