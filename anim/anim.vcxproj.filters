@@ -91,5 +91,8 @@
     <FxCompile Include="HDRPixelShader.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="LogCopyTexturePixelShader.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>
