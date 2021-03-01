@@ -2,6 +2,9 @@
 
 #include "Common\StepTimer.h"
 #include "Common\DeviceResources.h"
+#include "Common\Camera\Camera.h"
+#include "Common\Input\Mouse.h"
+#include "Common\Input\Keyboard.h"
 #include "Content\Sample3DSceneRenderer.h"
 #include "Content\SampleFpsTextRenderer.h"
 
@@ -16,6 +19,29 @@ namespace anim
         void CreateWindowSizeDependentResources();
         void Update();
         bool Render();
+
+        // Input system methods
+        bool IsKeysAutoRepeat() const;
+        void OnKeyPressed(const unsigned char keycode);
+        void OnKeyReleased(const unsigned char keycode);
+
+        bool IsCharsAutoRepeat() const;
+        void OnChar(const unsigned char ch);
+
+        void OnLeftPressed(int x, int y);
+        void OnLeftReleased(int x, int y);
+
+        void OnRightPressed(int x, int y);
+        void OnRightReleased(int x, int y);
+
+        void OnMiddlePressed(int x, int y);
+        void OnMiddleReleased(int x, int y);
+
+        void OnWheelUp(int x, int y);
+        void OnWheelDown(int x, int y);
+
+        void OnMouseMove(int x, int y);
+        void OnMouseMoveRaw(int x, int y);
 
     private:
         struct RenderTargetTexture
@@ -33,6 +59,13 @@ namespace anim
         // TODO: Replace with your own content renderers.
         std::unique_ptr<Sample3DSceneRenderer> m_sceneRenderer;
         std::unique_ptr<SampleFpsTextRenderer> m_fpsTextRenderer;
+
+        // Camera handler
+        std::shared_ptr<Camera> m_camera;
+
+        // Input system handlers
+        std::shared_ptr<input::Keyboard> m_keyboard;
+        std::shared_ptr<input::Mouse> m_mouse;
 
         // Rendering loop timer.
         DX::StepTimer m_timer;
@@ -76,5 +109,7 @@ namespace anim
 
         void copyTexture(const RenderTargetTexture &source,
             const RenderTargetTexture &dest) const;
+
+        void InputUpdate(DX::StepTimer const& timer);
     };
 }

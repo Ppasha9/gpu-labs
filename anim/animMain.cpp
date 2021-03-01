@@ -4,6 +4,7 @@
 
 using namespace anim;
 using namespace Concurrency;
+using namespace DirectX;
 
 Microsoft::WRL::ComPtr<ID3D11Texture2D> AnimMain::createCPUAccessibleTexture(
     const DX::Size &size, const std::string &namePrefix)
@@ -39,7 +40,11 @@ Microsoft::WRL::ComPtr<ID3D11Texture2D> AnimMain::createCPUAccessibleTexture(
 AnimMain::AnimMain(const std::shared_ptr<DX::DeviceResources>& deviceResources) :
     m_deviceResources(deviceResources)
 {
-    m_sceneRenderer = std::unique_ptr<Sample3DSceneRenderer>(new Sample3DSceneRenderer(m_deviceResources));
+    m_camera = std::make_shared<Camera>();
+    m_keyboard = std::make_shared<input::Keyboard>();
+    m_mouse = std::make_shared<input::Mouse>();
+
+    m_sceneRenderer = std::unique_ptr<Sample3DSceneRenderer>(new Sample3DSceneRenderer(m_deviceResources, m_camera));
     m_fpsTextRenderer = std::unique_ptr<SampleFpsTextRenderer>(new SampleFpsTextRenderer(m_deviceResources));
 
     m_vertexShader = deviceResources->createVertexShader("CopyTexture");
@@ -161,12 +166,56 @@ void AnimMain::CreateWindowSizeDependentResources()
     }
 }
 
+void AnimMain::InputUpdate(DX::StepTimer const& timer)
+{
+    while (!m_mouse->EventBufferIsEmpty())
+    {
+        input::MouseEvent me = m_mouse->ReadEvent();
+        if (m_mouse->IsRightDown())
+        {
+            if (me.GetType() == input::MouseEvent::EventType::RAW_MOVE)
+            {
+                m_camera->AdjustRotation((float)me.GetPosY() * 0.01f, (float)me.GetPosX() * (-0.01f), 0);
+            }
+        }
+    }
+
+    const float cameraSpeed = 0.02f;
+
+    if (m_keyboard->KeyIsPressed('W'))
+    {
+        m_camera->AdjustPosition(m_camera->GetForwardVector() * cameraSpeed);
+    }
+    if (m_keyboard->KeyIsPressed('S'))
+    {
+        m_camera->AdjustPosition(m_camera->GetBackwardVector() * cameraSpeed);
+    }
+    if (m_keyboard->KeyIsPressed('A'))
+    {
+        m_camera->AdjustPosition(m_camera->GetRightVector() * cameraSpeed);
+    }
+    if (m_keyboard->KeyIsPressed('D'))
+    {
+        m_camera->AdjustPosition(m_camera->GetLeftVector() * cameraSpeed);
+    }
+    if (m_keyboard->KeyIsPressed(VK_SPACE))
+    {
+        m_camera->AdjustPosition(0.0f, cameraSpeed, 0.0f);
+    }
+    if (m_keyboard->KeyIsPressed('Z'))
+    {
+        m_camera->AdjustPosition(0.0f, -cameraSpeed, 0.0f);
+    }
+}
+
 // Updates the application state once per frame.
 void AnimMain::Update()
 {
     // Update scene objects.
     m_timer.Tick([&]()
     {
+        InputUpdate(m_timer);
+
         // TODO: Replace this with your app's content update functions.
         m_sceneRenderer->Update(m_timer);
         m_fpsTextRenderer->Update(m_timer);
@@ -312,3 +361,79 @@ bool AnimMain::Render()
 
     return true;
 }
+
+bool AnimMain::IsKeysAutoRepeat() const
+{
+    return m_keyboard->IsKeysAutoRepeat();
+}
+
+void AnimMain::OnKeyPressed(const unsigned char keycode)
+{
+    m_keyboard->OnKeyPressed(keycode);
+}
+
+void AnimMain::OnKeyReleased(const unsigned char keycode)
+{
+    m_keyboard->OnKeyReleased(keycode);
+}
+
+bool AnimMain::IsCharsAutoRepeat() const
+{
+    return m_keyboard->IsCharsAutoRepeat();
+}
+
+void AnimMain::OnChar(const unsigned char ch)
+{
+    m_keyboard->OnChar(ch);
+}
+
+void AnimMain::OnLeftPressed(int x, int y)
+{
+    m_mouse->OnLeftPressed(x, y);
+}
+
+void AnimMain::OnLeftReleased(int x, int y)
+{
+    m_mouse->OnLeftReleased(x, y);
+}
+
+void AnimMain::OnRightPressed(int x, int y)
+{
+    m_mouse->OnRightPressed(x, y);
+}
+
+void AnimMain::OnRightReleased(int x, int y)
+{
+    m_mouse->OnRightReleased(x, y);
+}
+
+void AnimMain::OnMiddlePressed(int x, int y)
+{
+    m_mouse->OnMiddlePressed(x, y);
+}
+
+void AnimMain::OnMiddleReleased(int x, int y)
+{
+    m_mouse->OnMiddleReleased(x, y);
+}
+
+void AnimMain::OnWheelUp(int x, int y)
+{
+    m_mouse->OnWheelUp(x, y);
+}
+
+void AnimMain::OnWheelDown(int x, int y)
+{
+    m_mouse->OnWheelDown(x, y);
+}
+
+void AnimMain::OnMouseMove(int x, int y)
+{
+    m_mouse->OnMouseMove(x, y);
+}
+
+void AnimMain::OnMouseMoveRaw(int x, int y)
+{
+    m_mouse->OnMouseMoveRaw(x, y);
+}
+

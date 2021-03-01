@@ -11,9 +11,10 @@ namespace anim
     };
 
     // Used to send per-vertex data to the vertex shader.
-    struct VertexPositionColor
+    struct VertexPositionColorNormal
     {
         DirectX::XMFLOAT3 pos;
         DirectX::XMFLOAT3 color;
+        DirectX::XMFLOAT3 normal;
     };
 }
