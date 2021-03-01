@@ -17,4 +17,12 @@ namespace anim
         DirectX::XMFLOAT3 color;
         DirectX::XMFLOAT3 normal;
     };
+
+    // Constant buffer used to send light positions, colors and strengths.
+    struct LightConstantBuffer
+    {
+        DirectX::XMFLOAT4 lightColor1;
+        DirectX::XMFLOAT4 lightColor2;
+        DirectX::XMFLOAT4 lightColor3;
+    };
 }

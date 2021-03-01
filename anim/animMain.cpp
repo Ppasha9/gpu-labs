@@ -44,7 +44,7 @@ AnimMain::AnimMain(const std::shared_ptr<DX::DeviceResources>& deviceResources) 
     m_keyboard = std::make_shared<input::Keyboard>();
     m_mouse = std::make_shared<input::Mouse>();
 
-    m_sceneRenderer = std::unique_ptr<Sample3DSceneRenderer>(new Sample3DSceneRenderer(m_deviceResources, m_camera));
+    m_sceneRenderer = std::unique_ptr<Sample3DSceneRenderer>(new Sample3DSceneRenderer(m_deviceResources, m_camera, m_keyboard));
     m_fpsTextRenderer = std::unique_ptr<SampleFpsTextRenderer>(new SampleFpsTextRenderer(m_deviceResources));
 
     m_vertexShader = deviceResources->createVertexShader("CopyTexture");

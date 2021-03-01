@@ -10,12 +10,16 @@ using namespace DirectX;
 using namespace Windows::Foundation;
 
 // Loads vertex and pixel shaders from files and instantiates the cube geometry.
-Sample3DSceneRenderer::Sample3DSceneRenderer(const std::shared_ptr<DX::DeviceResources>& deviceResources, const std::shared_ptr<Camera>& camera) :
+Sample3DSceneRenderer::Sample3DSceneRenderer(
+    const std::shared_ptr<DX::DeviceResources>& deviceResources,
+    const std::shared_ptr<Camera>& camera,
+    const std::shared_ptr<input::Keyboard>& keyboard) :
     m_degreesPerSecond(45),
     m_indexCount(0),
     m_tracking(false),
     m_deviceResources(deviceResources),
-    m_camera(camera)
+    m_camera(camera),
+    m_keyboard(keyboard)
 {
     CreateDeviceDependentResources();
     CreateWindowSizeDependentResources();
@@ -48,6 +52,30 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 // Called once per frame, rotates the cube and calculates the model and view matrices.
 void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 {
+    if (m_keyboard->KeyIsPressed('T')) {
+        m_strengths[0] = 1.0f;
+    } else if (m_keyboard->KeyIsPressed('Y')) {
+        m_strengths[0] = 10.0f;
+    } else if (m_keyboard->KeyIsPressed('U')) {
+        m_strengths[0] = 100.0f;
+    }
+
+    if (m_keyboard->KeyIsPressed('G')) {
+        m_strengths[1] = 1.0f;
+    } else if (m_keyboard->KeyIsPressed('H')) {
+        m_strengths[1] = 10.0f;
+    } else if (m_keyboard->KeyIsPressed('J')) {
+        m_strengths[1] = 100.0f;
+    }
+
+    if (m_keyboard->KeyIsPressed('B')) {
+        m_strengths[2] = 1.0f;
+    } else if (m_keyboard->KeyIsPressed('N')) {
+        m_strengths[2] = 10.0f;
+    } else if (m_keyboard->KeyIsPressed('M')) {
+        m_strengths[2] = 100.0f;
+    }
+
     // Convert degrees to radians, then convert seconds to rotation angle
     float radiansPerSecond = XMConvertToRadians(m_degreesPerSecond);
     double totalRotation = timer.GetTotalSeconds() * radiansPerSecond;
@@ -57,6 +85,10 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 
     // Update the view matrix, cause it can be changed by input
     XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
+
+    m_lightConstantBufferData.lightColor1 = XMFLOAT4(LIGHT_COLOR_1.x, LIGHT_COLOR_1.y, LIGHT_COLOR_1.z, m_strengths[0]);
+    m_lightConstantBufferData.lightColor2 = XMFLOAT4(LIGHT_COLOR_2.x, LIGHT_COLOR_2.y, LIGHT_COLOR_2.z, m_strengths[1]);
+    m_lightConstantBufferData.lightColor3 = XMFLOAT4(LIGHT_COLOR_3.x, LIGHT_COLOR_3.y, LIGHT_COLOR_3.z, m_strengths[2]);
 }
 
 // Rotate the 3D cube model a set amount of radians.
@@ -82,6 +114,15 @@ void Sample3DSceneRenderer::Render()
         0,
         NULL,
         &m_constantBufferData,
+        0,
+        0
+    );
+
+    context->UpdateSubresource(
+        m_lightConstantBuffer.Get(),
+        0,
+        NULL,
+        &m_lightConstantBufferData,
         0,
         0
     );
@@ -129,6 +170,13 @@ void Sample3DSceneRenderer::Render()
         nullptr,
         0
     );
+
+    context->PSSetConstantBuffers(
+        0,
+        1,
+        m_lightConstantBuffer.GetAddressOf()
+    );
+
     annotation->EndEvent();
 
     annotation->BeginEvent(L"RenderCube");
@@ -221,6 +269,15 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         )
     );
 
+    CD3D11_BUFFER_DESC lightConstantBufferDesc(sizeof(LightConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
+    DX::ThrowIfFailed(
+        m_deviceResources->GetD3DDevice()->CreateBuffer(
+            &lightConstantBufferDesc,
+            nullptr,
+            &m_lightConstantBuffer
+        )
+    );
+
     // Load mesh vertices. Each vertex has a position, color and a normal.
     static const VertexPositionColorNormal cubeVertices[] =
     {
@@ -299,6 +356,7 @@ void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
     m_inputLayout.Reset();
     m_pixelShader.Reset();
     m_constantBuffer.Reset();
+    m_lightConstantBuffer.Reset();
     m_vertexBuffer.Reset();
     m_indexBuffer.Reset();
 }
