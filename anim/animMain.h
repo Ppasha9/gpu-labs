@@ -74,31 +74,28 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_copyPixelShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_brightnessPixelShader;
-        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_logPixelShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_hdrPixelShader;
 
         // Scene render target
         RenderTargetTexture m_sceneRenderTarget;
-        RenderTargetTexture m_sceneBrightnessRenderTarget;
 
         // Render targets of decreasing sizes used to calculate frame average brightness
         std::vector<RenderTargetTexture> m_averagingRenderTargets;
 
         Microsoft::WRL::ComPtr<ID3D11Texture2D> m_averageBrightnessCPUAccTexture;
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> m_sceneBrightnessCPUAccTexture;
 
         // Post-proccessing constant buffer
         Microsoft::WRL::ComPtr<ID3D11Buffer> m_constantBuffer;
         struct PostProcConstBuffer
         {
             float averageLogBrightness;
-            float minBrightness;
-            float maxBrightness;
-            float dummy;
+            float dummy[3];
         } m_postProcData;
 
         float m_adaptedAverageLogBrightness = 0;
         float m_adaptationTime = 2;
+
+        D3D11_MAPPED_SUBRESOURCE m_averageBrightnessAccessor;
 
         // Create texture of given size and bind it as render target and shader resource
         RenderTargetTexture createRenderTargetTexture(const DX::Size &size,
@@ -111,5 +108,7 @@ namespace anim
             const RenderTargetTexture &dest) const;
 
         void InputUpdate(DX::StepTimer const& timer);
+
+        void UnbindShaderResource() const;
     };
 }

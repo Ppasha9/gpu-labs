@@ -8,6 +8,7 @@ namespace input {
 	public:
 		Keyboard();
 
+		bool KeyWasReleased(const unsigned char keycode);
 		bool KeyIsPressed(const unsigned char keycode);
 		bool KeyBufferIsEmpty();
 		bool CharBufferIsEmpty();
@@ -29,11 +30,14 @@ namespace input {
 		bool IsKeysAutoRepeat();
 		bool IsCharsAutoRepeat();
 
+		void Update();
+
 	private:
 		bool m_autoRepeatKeys = false;
 		bool m_autoRepeatChars = false;
 
 		bool m_keyStates[256];
+		bool m_keyReleased[256];
 
 		std::queue<KeyboardEvent> m_keyBuffer;
 		std::queue<unsigned char> m_charBuffer;

@@ -61,6 +61,8 @@ namespace anim
 
         // Variable strength
         float m_strengths[3] = { 1.0f, 1.0f, 1.0f };
+
+        void CycleLight(int lightId);
     };
 }
 

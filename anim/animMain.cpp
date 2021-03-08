@@ -50,7 +50,6 @@ AnimMain::AnimMain(const std::shared_ptr<DX::DeviceResources>& deviceResources) 
     m_vertexShader = deviceResources->createVertexShader("CopyTexture");
     m_copyPixelShader = deviceResources->createPixelShader("CopyTexture");
     m_brightnessPixelShader = deviceResources->createPixelShader("BrightnessCopyTexture");
-    m_logPixelShader = deviceResources->createPixelShader("LogCopyTexture");
     m_hdrPixelShader = deviceResources->createPixelShader("HDR");
 
     // Create post-proccessing constant buffer
@@ -144,11 +143,6 @@ void AnimMain::CreateWindowSizeDependentResources()
 
     // Create scene render target
     m_sceneRenderTarget = createRenderTargetTexture(size, "Scene");
-    m_sceneBrightnessRenderTarget = createRenderTargetTexture(size, "SceneBrightness");
-
-    // Create scene brightness texture accessible via CPU
-    // to calculate min and max brightness
-    m_sceneBrightnessCPUAccTexture = createCPUAccessibleTexture(size, "SceneBrightness");
 
     // Create averaging render targets
     float minDim = min(size.width, size.height);
@@ -162,7 +156,7 @@ void AnimMain::CreateWindowSizeDependentResources()
         float dim = (float)(1 << (n - i));
         DX::Size avgSize(dim, dim);
         m_averagingRenderTargets.push_back(createRenderTargetTexture(avgSize,
-            std::to_string(avgSize.width) + "x" + std::to_string(avgSize.height)));
+            std::to_string(lround(avgSize.width)) + "x" + std::to_string(lround(avgSize.height))));
     }
 }
 
@@ -220,6 +214,8 @@ void AnimMain::Update()
         m_sceneRenderer->Update(m_timer);
         m_fpsTextRenderer->Update(m_timer);
     });
+
+    m_keyboard->Update();
 }
 
 void AnimMain::copyTexture(const RenderTargetTexture &source, const RenderTargetTexture &dest) const
@@ -227,6 +223,7 @@ void AnimMain::copyTexture(const RenderTargetTexture &source, const RenderTarget
     auto context = m_deviceResources->GetD3DDeviceContext();
 
     // Set destination texture as render target
+    UnbindShaderResource();
     context->OMSetRenderTargets(1, dest.renderTargetView.GetAddressOf(), nullptr);
     // Set viewport
     context->RSSetViewports(1, &dest.viewport);
@@ -237,6 +234,12 @@ void AnimMain::copyTexture(const RenderTargetTexture &source, const RenderTarget
     context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
     context->Draw(4, 0);
+}
+
+void AnimMain::UnbindShaderResource() const
+{
+    ID3D11ShaderResourceView *const pSRV[1] = { NULL };
+    m_deviceResources->GetD3DDeviceContext()->PSSetShaderResources(0, 1, pSRV);
 }
 
 // Renders the current frame according to the current application state.
@@ -252,8 +255,8 @@ bool AnimMain::Render()
     auto context = m_deviceResources->GetD3DDeviceContext();
 
     // Set scene render target
-    ID3D11RenderTargetView *const sceneTargets[1] = { m_sceneRenderTarget.renderTargetView.Get() };
-    context->OMSetRenderTargets(1, sceneTargets, m_deviceResources->GetDepthStencilView());
+    UnbindShaderResource();
+    context->OMSetRenderTargets(1, m_sceneRenderTarget.renderTargetView.GetAddressOf(), m_deviceResources->GetDepthStencilView());
     context->RSSetViewports(1, &m_sceneRenderTarget.viewport);
 
     // Clear back buffer, averaging textures and depth stencil view.
@@ -273,13 +276,9 @@ bool AnimMain::Render()
     // Attach copy texture vertex shader
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 
-    // Calculate scene brightness
+    // Calculate log of scene brightness
     context->PSSetShader(m_brightnessPixelShader.Get(), nullptr, 0);
-    copyTexture(m_sceneRenderTarget, m_sceneBrightnessRenderTarget);
-
-    // Calculate scene brightness logarithm
-    context->PSSetShader(m_logPixelShader.Get(), nullptr, 0);
-    copyTexture(m_sceneBrightnessRenderTarget, m_averagingRenderTargets.front());
+    copyTexture(m_sceneRenderTarget, m_averagingRenderTargets.front());
 
     // Continuously copy to smaller textures
     context->PSSetShader(m_copyPixelShader.Get(), nullptr, 0);
@@ -290,6 +289,7 @@ bool AnimMain::Render()
     annotation->BeginEvent(L"Render with HDR to screen");
     // Set render target to screen
     ID3D11RenderTargetView *const targets[1] = { m_deviceResources->GetBackBufferRenderTargetView() };
+    UnbindShaderResource();
     context->OMSetRenderTargets(1, targets, nullptr);
     // Reset the viewport to target the whole screen.
     auto viewport = m_deviceResources->GetScreenViewport();
@@ -300,57 +300,27 @@ bool AnimMain::Render()
     // Calculate adapted average brightness
     context->CopyResource(m_averageBrightnessCPUAccTexture.Get(),
         m_averagingRenderTargets.back().texture.Get());
-    D3D11_MAPPED_SUBRESOURCE averageBrightnessAccessor;
     DX::ThrowIfFailed(
         context->Map(
             m_averageBrightnessCPUAccTexture.Get(),
             0,
             D3D11_MAP_READ,
             0,
-            &averageBrightnessAccessor
+            &m_averageBrightnessAccessor
         )
     );
-    float averageLogBrightness = *(float *)averageBrightnessAccessor.pData;
+    float averageLogBrightness = *(float *)m_averageBrightnessAccessor.pData;
     m_adaptedAverageLogBrightness += (averageLogBrightness - m_adaptedAverageLogBrightness) *
         (float)(1 - std::exp(-m_timer.GetElapsedSeconds() / m_adaptationTime));
-
-    // Calculate min and max scene brightness
-    //context->CopyResource(m_sceneBrightnessCPUAccTexture.Get(),
-    //    m_sceneBrightnessRenderTarget.texture.Get());
-    //D3D11_MAPPED_SUBRESOURCE sceneBrightnessAccessor;
-    //DX::ThrowIfFailed(
-    //    context->Map(
-    //        m_sceneBrightnessCPUAccTexture.Get(),
-    //        0,
-    //        D3D11_MAP_READ,
-    //        0,
-    //        &sceneBrightnessAccessor
-    //    )
-    //);
-    //float *data = (float *)sceneBrightnessAccessor.pData;
-    //float minL = 99999999.0f, maxL = 0;
-    float minL = 0, maxL = 1;
-    //size_t w = m_sceneBrightnessRenderTarget.textureDesc.Width;
-    //size_t h = m_sceneBrightnessRenderTarget.textureDesc.Height;
-    //size_t pitch = sceneBrightnessAccessor.RowPitch / sizeof(float);
-    //for (size_t i = 0; i < h; i += max(1, h / 2))
-    //    for (size_t j = 0; j < w; j += max(1, w / 2))
-    //    {
-    //        float value = *(data + i * pitch + j * 4);
-    //        minL = min(minL, value);
-    //        maxL = max(maxL, value);
-    //    }
+    context->Unmap(m_averageBrightnessCPUAccTexture.Get(), 0);
 
     //Set constant buffer parameter
     m_postProcData.averageLogBrightness = m_adaptedAverageLogBrightness;
-    m_postProcData.minBrightness = minL;
-    m_postProcData.maxBrightness = maxL;
     context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL,
         &m_postProcData, 0, 0);
     context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
     // Set scene texture as shader resource
     context->PSSetShaderResources(0, 1, m_sceneRenderTarget.shaderResourceView.GetAddressOf());
-    //context->PSSetShaderResources(0, 1, m_averagingRenderTargets.back().shaderResourceView.GetAddressOf());
     // Render full-screen quad
     context->Draw(4, 0);
     annotation->EndEvent(); // Render with HDR to screen

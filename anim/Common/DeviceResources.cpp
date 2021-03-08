@@ -93,9 +93,6 @@ void DX::DeviceResources::CreateDeviceResources()
     };
 
     // Create the Direct3D 11 API device object and a corresponding context.
-    ComPtr<ID3D11Device> device;
-    ComPtr<ID3D11DeviceContext> context;
-
     HRESULT hr = D3D11CreateDevice(
         nullptr,                    // Specify nullptr to use the default adapter.
         D3D_DRIVER_TYPE_HARDWARE,    // Create a device using the hardware graphics driver.
@@ -104,9 +101,9 @@ void DX::DeviceResources::CreateDeviceResources()
         featureLevels,                // List of feature levels this app can support.
         ARRAYSIZE(featureLevels),    // Size of the list above.
         D3D11_SDK_VERSION,            // Always set this to D3D11_SDK_VERSION for Windows Store apps.
-        &device,                    // Returns the Direct3D device created.
+        &m_d3dDevice,                    // Returns the Direct3D device created.
         &m_d3dFeatureLevel,            // Returns feature level of device created.
-        &context                    // Returns the device immediate context.
+        &m_d3dContext                    // Returns the device immediate context.
         );
 
     if (FAILED(hr))
@@ -123,21 +120,12 @@ void DX::DeviceResources::CreateDeviceResources()
                 featureLevels,
                 ARRAYSIZE(featureLevels),
                 D3D11_SDK_VERSION,
-                &device,
+                &m_d3dDevice,
                 &m_d3dFeatureLevel,
-                &context
+                &m_d3dContext
                 )
             );
     }
-
-    // Store pointers to the Direct3D 11.3 API device and immediate context.
-    DX::ThrowIfFailed(
-        device.As(&m_d3dDevice)
-        );
-
-    DX::ThrowIfFailed(
-        context.As(&m_d3dContext)
-        );
 
     // Create annotations
     DX::ThrowIfFailed(
@@ -371,7 +359,7 @@ void DX::DeviceResources::Present()
 Microsoft::WRL::ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader(
     const std::string &namePrefix) const
 {
-    ID3D11PixelShader *output;
+    ComPtr<ID3D11PixelShader> output;
 
     std::vector<byte> data;
     bool success = false;
@@ -408,7 +396,7 @@ Microsoft::WRL::ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader
 Microsoft::WRL::ComPtr<ID3D11VertexShader> DX::DeviceResources::createVertexShader(
     const std::string &namePrefix) const
 {
-    ID3D11VertexShader *output;
+    ComPtr<ID3D11VertexShader> output;
 
     std::vector<byte> data;
     bool success = false;

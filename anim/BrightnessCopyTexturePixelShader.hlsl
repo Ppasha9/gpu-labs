@@ -11,5 +11,5 @@ struct PixelShaderInput
 float4 main(PixelShaderInput input) : SV_TARGET
 {
     float4 p = shaderTexture.Sample(samplerState, input.texcoord);
-    return 0.2126 * p.r + 0.7151 * p.g + 0.0722 * p.b;
+    return log(0.2126 * p.r + 0.7151 * p.g + 0.0722 * p.b + 1);
 }

@@ -124,8 +124,10 @@
     <FxCompile Include="HDRPixelShader.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
-    <FxCompile Include="LogCopyTexturePixelShader.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Content\noiseSimplex.cginc">
+      <Filter>Source Files\Content</Filter>
+    </None>
   </ItemGroup>
 </Project>

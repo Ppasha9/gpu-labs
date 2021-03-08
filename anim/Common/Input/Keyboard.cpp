@@ -8,6 +8,9 @@ Keyboard::Keyboard()
 	for (int i = 0; i < 256; i++) {
 		m_keyStates[i] = false;
 	}
+
+	for (int i = 0; i < 256; i++)
+		m_keyReleased[i] = false;
 }
 
 bool Keyboard::KeyIsPressed(const unsigned char keycode)
@@ -62,6 +65,7 @@ void Keyboard::OnKeyPressed(const unsigned char key)
 void Keyboard::OnKeyReleased(const unsigned char key)
 {
 	m_keyStates[key] = false;
+	m_keyReleased[key] = true;
 	m_keyBuffer.push(KeyboardEvent(KeyboardEvent::EventType::RELEASE, key));
 }
 
@@ -98,4 +102,15 @@ bool Keyboard::IsKeysAutoRepeat()
 bool Keyboard::IsCharsAutoRepeat()
 {
 	return m_autoRepeatChars;
+}
+
+void Keyboard::Update()
+{
+	for (int i = 0; i < 256; i++)
+		m_keyReleased[i] = false;
+}
+
+bool Keyboard::KeyWasReleased(const unsigned char keycode)
+{
+	return m_keyReleased[keycode];
 }

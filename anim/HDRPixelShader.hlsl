@@ -38,8 +38,7 @@ float keyValue(float l)
 float exposure()
 {
     float l = exp(averageLogBrightness) - 1;
-    //return keyValue(l) / (clamp(l, minL, maxL));
-    return keyValue(l) / l;
+    return keyValue(l) / (clamp(l, 0, 9999));
 }
 
 float3 tonemapFilmic(float3 color)
