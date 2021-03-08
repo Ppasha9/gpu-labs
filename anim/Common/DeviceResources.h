@@ -40,11 +40,6 @@ namespace DX
     {
     public:
         DeviceResources();
-        ~DeviceResources()
-        {
-            m_d3dContext->ClearState();
-            m_d3dContext->Flush();
-        }
         void SetWindow(HWND hwnd);
         void SetLogicalSize(Size logicalSize);
         void Present();

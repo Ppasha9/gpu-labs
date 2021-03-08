@@ -9,7 +9,7 @@ using namespace DirectX;
 Microsoft::WRL::ComPtr<ID3D11Texture2D> AnimMain::createCPUAccessibleTexture(
     const DX::Size &size, const std::string &namePrefix)
 {
-    ID3D11Texture2D *output;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> output;
 
     CD3D11_TEXTURE2D_DESC textureDesc(
         DXGI_FORMAT_R32G32B32A32_FLOAT,
@@ -210,7 +210,6 @@ void AnimMain::Update()
     {
         InputUpdate(m_timer);
 
-        // TODO: Replace this with your app's content update functions.
         m_sceneRenderer->Update(m_timer);
         m_fpsTextRenderer->Update(m_timer);
     });
@@ -406,4 +405,3 @@ void AnimMain::OnMouseMoveRaw(int x, int y)
 {
     m_mouse->OnMouseMoveRaw(x, y);
 }
-
