@@ -83,8 +83,8 @@ void SampleFpsTextRenderer::Render()
 
     // Position on the bottom right corner
     D2D1::Matrix3x2F screenTranslation = D2D1::Matrix3x2F::Translation(
-        logicalSize.Width - m_textMetrics.layoutWidth,
-        logicalSize.Height - m_textMetrics.height
+        logicalSize.width - m_textMetrics.layoutWidth,
+        logicalSize.height - m_textMetrics.height
         );
 
     context->SetTransform(screenTranslation);

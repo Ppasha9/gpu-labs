@@ -11,7 +11,7 @@ using namespace Microsoft::WRL;
 DX::DeviceResources::DeviceResources() :
     m_screenViewport(),
     m_d3dFeatureLevel(D3D_FEATURE_LEVEL_9_1),
-    m_logicalSize()
+    m_logicalSize(1, 1)
 {
     CreateDeviceIndependentResources();
     CreateDeviceResources();
@@ -93,9 +93,6 @@ void DX::DeviceResources::CreateDeviceResources()
     };
 
     // Create the Direct3D 11 API device object and a corresponding context.
-    ComPtr<ID3D11Device> device;
-    ComPtr<ID3D11DeviceContext> context;
-
     HRESULT hr = D3D11CreateDevice(
         nullptr,                    // Specify nullptr to use the default adapter.
         D3D_DRIVER_TYPE_HARDWARE,    // Create a device using the hardware graphics driver.
@@ -104,9 +101,9 @@ void DX::DeviceResources::CreateDeviceResources()
         featureLevels,                // List of feature levels this app can support.
         ARRAYSIZE(featureLevels),    // Size of the list above.
         D3D11_SDK_VERSION,            // Always set this to D3D11_SDK_VERSION for Windows Store apps.
-        &device,                    // Returns the Direct3D device created.
+        &m_d3dDevice,                    // Returns the Direct3D device created.
         &m_d3dFeatureLevel,            // Returns feature level of device created.
-        &context                    // Returns the device immediate context.
+        &m_d3dContext                    // Returns the device immediate context.
         );
 
     if (FAILED(hr))
@@ -123,21 +120,12 @@ void DX::DeviceResources::CreateDeviceResources()
                 featureLevels,
                 ARRAYSIZE(featureLevels),
                 D3D11_SDK_VERSION,
-                &device,
+                &m_d3dDevice,
                 &m_d3dFeatureLevel,
-                &context
+                &m_d3dContext
                 )
             );
     }
-
-    // Store pointers to the Direct3D 11.3 API device and immediate context.
-    DX::ThrowIfFailed(
-        device.As(&m_d3dDevice)
-        );
-
-    DX::ThrowIfFailed(
-        context.As(&m_d3dContext)
-        );
 
     // Create annotations
     DX::ThrowIfFailed(
@@ -181,8 +169,8 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
         DX::ThrowIfFailed(
             m_swapChain->ResizeBuffers(
                 2, // Double-buffered swap chain.
-                lround(m_logicalSize.Width),
-                lround(m_logicalSize.Height),
+                lround(m_logicalSize.width),
+                lround(m_logicalSize.height),
                 DXGI_FORMAT_B8G8R8A8_UNORM,
                 0
                 )
@@ -193,8 +181,8 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
         // Otherwise, create a new one using the same adapter as the existing Direct3D device.
         DXGI_SWAP_CHAIN_DESC swapChainDesc = { 0 };
 
-        swapChainDesc.BufferDesc.Width = lround(m_logicalSize.Width);        // Match the size of the window.
-        swapChainDesc.BufferDesc.Height = lround(m_logicalSize.Height);
+        swapChainDesc.BufferDesc.Width = lround(m_logicalSize.width);        // Match the size of the window.
+        swapChainDesc.BufferDesc.Height = lround(m_logicalSize.height);
         swapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;                // This is the most common swap chain format.
         swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
         swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
@@ -245,12 +233,15 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d3dRenderTargetView
             )
         );
+    std::string name = "BackBufferRenderTargetView";
+    m_d3dRenderTargetView->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
+        name.c_str());
 
     // Create a depth stencil view for use with 3D rendering if needed.
     CD3D11_TEXTURE2D_DESC depthStencilDesc(
         DXGI_FORMAT_D24_UNORM_S8_UINT, 
-        lround(m_logicalSize.Width),
-        lround(m_logicalSize.Height),
+        lround(m_logicalSize.width),
+        lround(m_logicalSize.height),
         1, // This depth stencil view has only one texture.
         1, // Use a single mipmap level.
         D3D11_BIND_DEPTH_STENCIL
@@ -273,13 +264,33 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d3dDepthStencilView
             )
         );
-    
+
+    // Create sampler state
+    D3D11_SAMPLER_DESC samplerDesc;
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.MipLODBias = 0.0f;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+    samplerDesc.BorderColor[0] = 0;
+    samplerDesc.BorderColor[1] = 0;
+    samplerDesc.BorderColor[2] = 0;
+    samplerDesc.BorderColor[3] = 0;
+    samplerDesc.MinLOD = 0;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateSamplerState(&samplerDesc, &m_samplerState)
+    );
+
     // Set the 3D rendering viewport to target the entire window.
     m_screenViewport = CD3D11_VIEWPORT(
         0.0f,
         0.0f,
-        m_logicalSize.Width,
-        m_logicalSize.Height
+        m_logicalSize.width,
+        m_logicalSize.height
         );
 
     m_d3dContext->RSSetViewports(1, &m_screenViewport);
@@ -304,13 +315,6 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d2dTargetBitmap
             )
         );
-    //DX::ThrowIfFailed(
-    //    m_d2dContext->CreateBitmapFromDxgiSurface(
-    //        dxgiBackBuffer.Get(),
-    //        &bitmapProperties,
-    //        &m_d2dTargetBitmap
-    //        )
-    //    );
 
     m_d2dContext->SetTarget(m_d2dTargetBitmap.Get());
 
@@ -350,4 +354,78 @@ void DX::DeviceResources::Present()
     HRESULT hr = m_swapChain->Present(1, 0);
 
     DX::ThrowIfFailed(hr);
+}
+
+Microsoft::WRL::ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader(
+    const std::string &namePrefix) const
+{
+    ComPtr<ID3D11PixelShader> output;
+
+    std::vector<byte> data;
+    bool success = false;
+    try
+    {
+#ifdef _DEBUG
+        data = DX::ReadData("x64\\Debug\\" + namePrefix + "PixelShader.cso");
+#else
+        data = DX::ReadData("x64\\Release\\" + namePrefix + "PixelShader.cso");
+#endif // DEBUG
+        success = true;
+    }
+    catch (std::exception &)
+    {
+    }
+    if (!success)
+        data = DX::ReadData(namePrefix + "PixelShader.cso");
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreatePixelShader(
+            data.data(),
+            data.size(),
+            nullptr,
+            &output
+        )
+    );
+    std::string shaderName = namePrefix + "PixelShader";
+    output->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)shaderName.size(),
+        shaderName.c_str());
+
+    return output;
+}
+
+Microsoft::WRL::ComPtr<ID3D11VertexShader> DX::DeviceResources::createVertexShader(
+    const std::string &namePrefix) const
+{
+    ComPtr<ID3D11VertexShader> output;
+
+    std::vector<byte> data;
+    bool success = false;
+    try
+    {
+#ifdef _DEBUG
+        data = DX::ReadData("x64\\Debug\\" + namePrefix + "VertexShader.cso");
+#else
+        data = DX::ReadData("x64\\Release\\" + namePrefix + "VertexShader.cso");
+#endif // DEBUG
+        success = true;
+    }
+    catch (std::exception &)
+    {
+    }
+    if (!success)
+        data = DX::ReadData(namePrefix + "VertexShader.cso");
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateVertexShader(
+            data.data(),
+            data.size(),
+            nullptr,
+            &output
+        )
+    );
+    std::string shaderName = namePrefix + "VertexShader";
+    output->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)shaderName.size(),
+        shaderName.c_str());
+
+    return output;
 }

@@ -19,6 +19,9 @@
     <Filter Include="Source Files\Content">
       <UniqueIdentifier>{7cec6318-e421-424c-8a2e-a768585466cb}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Common\Camera">
+      <UniqueIdentifier>{8d22567c-1fb0-4719-80d8-818f8b2567d3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common\DeviceResources.h">
@@ -48,6 +51,21 @@
     <ClInclude Include="AnimMain.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="Common\Camera\Camera.h">
+      <Filter>Source Files\Common\Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Input\KeyboardEvent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Input\Keyboard.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Input\MouseEvent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Input\Mouse.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common\DeviceResources.cpp">
@@ -71,6 +89,21 @@
     <ClCompile Include="AnimMain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Common\Camera\Camera.cpp">
+      <Filter>Source Files\Common\Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\Input\KeyboardEvent.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\Input\Keyboard.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\Input\MouseEvent.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\Input\Mouse.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Content\SamplePixelShader.hlsl">
@@ -79,5 +112,22 @@
     <FxCompile Include="Content\SampleVertexShader.hlsl">
       <Filter>Source Files\Content</Filter>
     </FxCompile>
+    <FxCompile Include="CopyTexturePixelShader.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="CopyTextureVertexShader.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="BrightnessCopyTexturePixelShader.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="HDRPixelShader.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Content\noiseSimplex.cginc">
+      <Filter>Source Files\Content</Filter>
+    </None>
   </ItemGroup>
 </Project>

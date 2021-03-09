@@ -10,11 +10,16 @@ using namespace DirectX;
 using namespace Windows::Foundation;
 
 // Loads vertex and pixel shaders from files and instantiates the cube geometry.
-Sample3DSceneRenderer::Sample3DSceneRenderer(const std::shared_ptr<DX::DeviceResources>& deviceResources) :
+Sample3DSceneRenderer::Sample3DSceneRenderer(
+    const std::shared_ptr<DX::DeviceResources>& deviceResources,
+    const std::shared_ptr<Camera>& camera,
+    const std::shared_ptr<input::Keyboard>& keyboard) :
     m_degreesPerSecond(45),
     m_indexCount(0),
     m_tracking(false),
-    m_deviceResources(deviceResources)
+    m_deviceResources(deviceResources),
+    m_camera(camera),
+    m_keyboard(keyboard)
 {
     CreateDeviceDependentResources();
     CreateWindowSizeDependentResources();
@@ -24,45 +29,71 @@ Sample3DSceneRenderer::Sample3DSceneRenderer(const std::shared_ptr<DX::DeviceRes
 void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 {
     DX::Size outputSize = m_deviceResources->GetLogicalSize();
-    float aspectRatio = outputSize.Width / outputSize.Height;
+    float aspectRatio = outputSize.width / outputSize.height;
     float fovAngleY = 70.0f * XM_PI / 180.0f;
 
-    XMMATRIX perspectiveMatrix = XMMatrixPerspectiveFovRH(
-        fovAngleY,
-        aspectRatio,
-        0.01f,
-        100.0f
-    );
+    m_camera->SetProjectionValues(70.0f, aspectRatio, 0.01f, 100.0f);
 
     XMStoreFloat4x4(
         &m_constantBufferData.projection,
-        XMMatrixTranspose(perspectiveMatrix)
+        XMMatrixTranspose(m_camera->GetProjectionMatrix())
     );
 
     // Eye is at (0,0.7,1.5), looking at point (0,-0.1,0) with the up-vector along the y-axis.
-    static const XMVECTORF32 eye = { 0.0f, 0.7f, 1.5f, 0.0f };
-    static const XMVECTORF32 at = { 0.0f, -0.1f, 0.0f, 0.0f };
-    static const XMVECTORF32 up = { 0.0f, 1.0f, 0.0f, 0.0f };
+    static const XMFLOAT3 eye = { 0.0f, 0.7f, 1.5f };
+    static const XMFLOAT3 at = { 0.0f, -0.1f, 0.0f };
 
-    XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(XMMatrixLookAtRH(eye, at, up)));
+    m_camera->SetPosition(XMLoadFloat3(&eye));
+    m_camera->SetLookAtPos(at);
+
+    XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
+}
+
+void Sample3DSceneRenderer::CycleLight(int lightId)
+{
+    static int lightState[3] = { 0, 0, 0 };
+    const float strengths[] = { 1, 10, 100 };
+    const int stateN = sizeof(strengths) / sizeof(float);
+    auto nextState = [stateN](int curState) -> int
+    {
+        return ++curState >= stateN ? 0 : curState;
+    };
+
+    lightState[lightId] = nextState(lightState[lightId]);
+    m_strengths[lightId] = strengths[lightState[lightId]];
 }
 
 // Called once per frame, rotates the cube and calculates the model and view matrices.
 void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 {
+    if (m_keyboard->KeyWasReleased('1'))
+        CycleLight(0);
+    if (m_keyboard->KeyWasReleased('2'))
+        CycleLight(1);
+    if (m_keyboard->KeyWasReleased('3'))
+        CycleLight(2);
+
     // Convert degrees to radians, then convert seconds to rotation angle
     float radiansPerSecond = XMConvertToRadians(m_degreesPerSecond);
     double totalRotation = timer.GetTotalSeconds() * radiansPerSecond;
     float radians = static_cast<float>(fmod(totalRotation, XM_2PI));
 
     Rotate(radians);
+
+    // Update the view matrix, cause it can be changed by input
+    XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
+
+    m_lightConstantBufferData.lightColor1 = XMFLOAT4(LIGHT_COLOR_1.x, LIGHT_COLOR_1.y, LIGHT_COLOR_1.z, m_strengths[0]);
+    m_lightConstantBufferData.lightColor2 = XMFLOAT4(LIGHT_COLOR_2.x, LIGHT_COLOR_2.y, LIGHT_COLOR_2.z, m_strengths[1]);
+    m_lightConstantBufferData.lightColor3 = XMFLOAT4(LIGHT_COLOR_3.x, LIGHT_COLOR_3.y, LIGHT_COLOR_3.z, m_strengths[2]);
 }
 
 // Rotate the 3D cube model a set amount of radians.
 void Sample3DSceneRenderer::Rotate(float radians)
 {
     // Prepare to pass the updated model matrix to the shader
-    XMStoreFloat4x4(&m_constantBufferData.model, XMMatrixTranspose(XMMatrixRotationY(radians)));
+    // XMStoreFloat4x4(&m_constantBufferData.model, XMMatrixTranspose(XMMatrixRotationY(radians)));
+    XMStoreFloat4x4(&m_constantBufferData.model, XMMatrixIdentity());
 }
 
 // Renders one frame using the vertex and pixel shaders.
@@ -84,8 +115,17 @@ void Sample3DSceneRenderer::Render()
         0
     );
 
+    context->UpdateSubresource(
+        m_lightConstantBuffer.Get(),
+        0,
+        NULL,
+        &m_lightConstantBufferData,
+        0,
+        0
+    );
+
     // Each vertex is one instance of the VertexPositionColor struct.
-    UINT stride = sizeof(VertexPositionColor);
+    UINT stride = sizeof(VertexPositionColorNormal);
     UINT offset = 0;
     context->IASetVertexBuffers(
         0,
@@ -127,6 +167,13 @@ void Sample3DSceneRenderer::Render()
         nullptr,
         0
     );
+
+    context->PSSetConstantBuffers(
+        0,
+        1,
+        m_lightConstantBuffer.GetAddressOf()
+    );
+
     annotation->EndEvent();
 
     annotation->BeginEvent(L"RenderCube");
@@ -183,6 +230,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
 
     DX::ThrowIfFailed(
@@ -218,17 +266,33 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         )
     );
 
-    // Load mesh vertices. Each vertex has a position and a color.
-    static const VertexPositionColor cubeVertices[] =
+    CD3D11_BUFFER_DESC lightConstantBufferDesc(sizeof(LightConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
+    DX::ThrowIfFailed(
+        m_deviceResources->GetD3DDevice()->CreateBuffer(
+            &lightConstantBufferDesc,
+            nullptr,
+            &m_lightConstantBuffer
+        )
+    );
+
+    // Load mesh vertices. Each vertex has a position, color and a normal.
+//    static const VertexPositionColorNormal cubeVertices[] =
+//    {
+//        {XMFLOAT3(-0.5f, -0.5f, -0.5f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(-1.0f, -1.0f, -1.0f)},
+//        {XMFLOAT3(-0.5f, -0.5f,  0.5f), XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT3(-1.0f, -1.0f, 1.0f)},
+//        {XMFLOAT3(-0.5f,  0.5f, -0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT3(-1.0f, 1.0f, -1.0f)},
+//        {XMFLOAT3(-0.5f,  0.5f,  0.5f), XMFLOAT3(0.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 1.0f, 1.0f)},
+//        {XMFLOAT3(0.5f, -0.5f, -0.5f), XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, -1.0f, -1.0f)},
+//        {XMFLOAT3(0.5f, -0.5f,  0.5f), XMFLOAT3(1.0f, 0.0f, 1.0f), XMFLOAT3(1.0f, -1.0f, 1.0f)},
+//        {XMFLOAT3(0.5f,  0.5f, -0.5f), XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT3(1.0f, 1.0f, -1.0f)},
+//        {XMFLOAT3(0.5f,  0.5f,  0.5f), XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f)},
+//    };
+    static const VertexPositionColorNormal cubeVertices[] =
     {
-        {XMFLOAT3(-0.5f, -0.5f, -0.5f), XMFLOAT3(0.0f, 0.0f, 0.0f)},
-        {XMFLOAT3(-0.5f, -0.5f,  0.5f), XMFLOAT3(0.0f, 0.0f, 1.0f)},
-        {XMFLOAT3(-0.5f,  0.5f, -0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f)},
-        {XMFLOAT3(-0.5f,  0.5f,  0.5f), XMFLOAT3(0.0f, 1.0f, 1.0f)},
-        {XMFLOAT3(0.5f, -0.5f, -0.5f), XMFLOAT3(1.0f, 0.0f, 0.0f)},
-        {XMFLOAT3(0.5f, -0.5f,  0.5f), XMFLOAT3(1.0f, 0.0f, 1.0f)},
-        {XMFLOAT3(0.5f,  0.5f, -0.5f), XMFLOAT3(1.0f, 1.0f, 0.0f)},
-        {XMFLOAT3(0.5f,  0.5f,  0.5f), XMFLOAT3(1.0f, 1.0f, 1.0f)},
+        {XMFLOAT3(-5.0f, 0.0f, -5.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, 1.0f, 0.0f)},
+        {XMFLOAT3(-5.0f, 0.0f,  5.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT3(0.0f, 1.0f, 0.0f)},
+        {XMFLOAT3(5.0f,  0.0f, -5.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f)},
+        {XMFLOAT3(5.0f,  0.0f,  5.0f), XMFLOAT3(1.0f, 0.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f)},
     };
 
     D3D11_SUBRESOURCE_DATA vertexBufferData = { 0 };
@@ -255,23 +319,8 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     // first triangle of this mesh.
     static const unsigned short cubeIndices[] =
     {
-        0,2,1, // -x
-        1,2,3,
-
-        4,5,6, // +x
-        5,7,6,
-
-        0,1,5, // -y
-        0,5,4,
-
-        2,6,7, // +y
-        2,7,3,
-
-        0,4,6, // -z
-        0,6,2,
-
-        1,3,7, // +z
-        1,7,5,
+        0,2,3, // +y
+        0,3,1,
     };
 
     m_indexCount = ARRAYSIZE(cubeIndices);
@@ -296,6 +345,7 @@ void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
     m_inputLayout.Reset();
     m_pixelShader.Reset();
     m_constantBuffer.Reset();
+    m_lightConstantBuffer.Reset();
     m_vertexBuffer.Reset();
     m_indexBuffer.Reset();
 }

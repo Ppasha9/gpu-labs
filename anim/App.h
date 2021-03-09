@@ -4,7 +4,6 @@
 #include "Common\DeviceResources.h"
 #include "animMain.h"
 
-
 namespace anim
 {
     class App
