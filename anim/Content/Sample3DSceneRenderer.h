@@ -40,17 +40,22 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pixelShader;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_constantBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_lightConstantBuffer;
+        Microsoft::WRL::ComPtr<ID3D11Buffer>       m_materialConstantBuffer;
+        Microsoft::WRL::ComPtr<ID3D11Buffer>       m_generalConstantBuffer;
 
-        // System resources for cube geometry.
         ModelViewProjectionConstantBuffer    m_constantBufferData;
-        LightConstantBuffer                  m_lightConstantBufferData;
+        MaterialConstantBuffer               m_materialConstantBufferData;
+        GeneralConstantBuffer                m_generalConstantBufferData;
+
         size_t                               m_indexCount;
 
         // Lights information
+        LightConstantBuffer                  m_lightConstantBufferData;
+
 
         // Constant colors
-        const DirectX::XMFLOAT3 LIGHT_COLOR_1 = DirectX::XMFLOAT3(1.0f, 0.0f, 0.0f);
-        const DirectX::XMFLOAT3 LIGHT_COLOR_2 = DirectX::XMFLOAT3(1.0f, 0.0f, 0.0f);
+        const DirectX::XMFLOAT3 LIGHT_COLOR_1 = DirectX::XMFLOAT3(1.0f, 1.0f, 0.8f);
+        const DirectX::XMFLOAT3 LIGHT_COLOR_2 = DirectX::XMFLOAT3(1.0f, 1.0f, 0.8f);
         const DirectX::XMFLOAT3 LIGHT_COLOR_3 = DirectX::XMFLOAT3(1.0f, 0.0f, 0.0f);
 
         // Variable strength

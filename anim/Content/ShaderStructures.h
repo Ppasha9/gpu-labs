@@ -25,4 +25,18 @@ namespace anim
         DirectX::XMFLOAT4 lightColor2;
         DirectX::XMFLOAT4 lightColor3;
     };
+
+    struct MaterialConstantBuffer
+    {
+        DirectX::XMFLOAT3 albedo;
+        float roughness;
+        float metalness;
+        float dummy[3];
+    };
+
+    struct GeneralConstantBuffer
+    {
+        DirectX::XMFLOAT3 cameraPos;
+        float time;
+    };
 }

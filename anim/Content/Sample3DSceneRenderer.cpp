@@ -74,11 +74,18 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
     // Update the view matrix, cause it can be changed by input
     XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
 
+    XMStoreFloat4x4(&m_constantBufferData.model, XMMatrixIdentity());
+
     m_lightConstantBufferData.lightColor1 = XMFLOAT4(LIGHT_COLOR_1.x, LIGHT_COLOR_1.y, LIGHT_COLOR_1.z, m_strengths[0]);
     m_lightConstantBufferData.lightColor2 = XMFLOAT4(LIGHT_COLOR_2.x, LIGHT_COLOR_2.y, LIGHT_COLOR_2.z, m_strengths[1]);
     m_lightConstantBufferData.lightColor3 = XMFLOAT4(LIGHT_COLOR_3.x, LIGHT_COLOR_3.y, LIGHT_COLOR_3.z, m_strengths[2]);
 
-    XMStoreFloat4x4(&m_constantBufferData.model, XMMatrixIdentity());
+    m_generalConstantBufferData.cameraPos = m_camera->GetPositionFloat3();
+    m_generalConstantBufferData.time = (float)timer.GetTotalSeconds();
+
+    m_materialConstantBufferData.albedo = XMFLOAT3(1, 0, 0);
+    m_materialConstantBufferData.roughness = 0.5f * (1 + sin(timer.GetTotalSeconds()));
+    m_materialConstantBufferData.metalness = 0.5f * (1 + cos(timer.GetTotalSeconds() / 2));
 }
 
 // Renders one frame using the vertex and pixel shaders.
@@ -91,40 +98,20 @@ void Sample3DSceneRenderer::Render()
     annotation->BeginEvent(L"SetSphereGeometry");
 
     // Prepare the constant buffer to send it to the graphics device.
-    context->UpdateSubresource(
-        m_constantBuffer.Get(),
-        0,
-        NULL,
-        &m_constantBufferData,
-        0,
-        0
-    );
-
-    context->UpdateSubresource(
-        m_lightConstantBuffer.Get(),
-        0,
-        NULL,
-        &m_lightConstantBufferData,
-        0,
-        0
-    );
+    context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL, &m_constantBufferData, 0, 0);
+    context->UpdateSubresource(m_lightConstantBuffer.Get(), 0, NULL,
+        &m_lightConstantBufferData, 0, 0);
+    context->UpdateSubresource(m_materialConstantBuffer.Get(), 0, NULL,
+        &m_materialConstantBufferData, 0, 0);
+    context->UpdateSubresource(m_generalConstantBuffer.Get(), 0, NULL,
+        &m_generalConstantBufferData, 0, 0);
 
     // Each vertex is one instance of the VertexPositionColor struct.
     UINT stride = sizeof(VertexPositionColorNormal);
     UINT offset = 0;
-    context->IASetVertexBuffers(
-        0,
-        1,
-        m_vertexBuffer.GetAddressOf(),
-        &stride,
-        &offset
-    );
+    context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
 
-    context->IASetIndexBuffer(
-        m_indexBuffer.Get(),
-        DXGI_FORMAT_R16_UINT, // Each index is one 16-bit unsigned integer (short).
-        0
-    );
+    context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
 
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -133,31 +120,17 @@ void Sample3DSceneRenderer::Render()
 
     annotation->BeginEvent(L"AttachShaders");
     // Attach our vertex shader.
-    context->VSSetShader(
-        m_vertexShader.Get(),
-        nullptr,
-        0
-    );
+    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 
     // Send the constant buffer to the graphics device.
-    context->VSSetConstantBuffers(
-        0,
-        1,
-        m_constantBuffer.GetAddressOf()
-    );
+    context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
 
     // Attach our pixel shader.
-    context->PSSetShader(
-        m_pixelShader.Get(),
-        nullptr,
-        0
-    );
+    context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 
-    context->PSSetConstantBuffers(
-        0,
-        1,
-        m_lightConstantBuffer.GetAddressOf()
-    );
+    context->PSSetConstantBuffers(0, 1, m_lightConstantBuffer.GetAddressOf());
+    context->PSSetConstantBuffers(1, 1, m_materialConstantBuffer.GetAddressOf());
+    context->PSSetConstantBuffers(2, 1, m_generalConstantBuffer.GetAddressOf());
 
     annotation->EndEvent();
 
@@ -174,17 +147,15 @@ void Sample3DSceneRenderer::Render()
 void Sample3DSceneRenderer::CreateDeviceDependentResources()
 {
     // Load shaders
-    std::vector<byte> vsData, psData;
+    std::vector<byte> vsData;
 
     bool success = false;
     try
     {
 #ifdef _DEBUG
         vsData = DX::ReadData("x64\\Debug\\SampleVertexShader.cso");
-        psData = DX::ReadData("x64\\Debug\\SamplePixelShader.cso");
 #else
         vsData = DX::ReadData("x64\\Release\\SampleVertexShader.cso");
-        psData = DX::ReadData("x64\\Release\\SamplePixelShader.cso");
 #endif // DEBUG
         success = true;
     }
@@ -194,7 +165,6 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     if (!success)
     {
         vsData = DX::ReadData("SampleVertexShader.cso");
-        psData = DX::ReadData("SamplePixelShader.cso");
     }
 
     // After the vertex shader file is loaded, create the shader and input layout.
@@ -228,20 +198,10 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         )
     );
 
-    // After the pixel shader file is loaded, create the shader and constant buffer.
-    DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreatePixelShader(
-            psData.data(),
-            psData.size(),
-            nullptr,
-            &m_pixelShader
-        )
-    );
+    // Create pixel shader
+    m_pixelShader = m_deviceResources->createPixelShader("PBR");
 
-    shaderName = "SamplePixelShader";
-    m_pixelShader->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)shaderName.size(),
-        shaderName.c_str());
-
+    // Create MVP matrices constast buffer
     CD3D11_BUFFER_DESC constantBufferDesc(sizeof(ModelViewProjectionConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
     DX::ThrowIfFailed(
         m_deviceResources->GetD3DDevice()->CreateBuffer(
@@ -260,9 +220,27 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         )
     );
 
+    CD3D11_BUFFER_DESC materialConstantBufferDesc(sizeof(MaterialConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
+    DX::ThrowIfFailed(
+        m_deviceResources->GetD3DDevice()->CreateBuffer(
+            &materialConstantBufferDesc,
+            nullptr,
+            &m_materialConstantBuffer
+        )
+    );
+
+    CD3D11_BUFFER_DESC generalConstantBufferDesc(sizeof(GeneralConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
+    DX::ThrowIfFailed(
+        m_deviceResources->GetD3DDevice()->CreateBuffer(
+            &generalConstantBufferDesc,
+            nullptr,
+            &m_generalConstantBuffer
+        )
+    );
+
     static const int
-        numLatitudeLines = 32,
-        numLongitudeLines = 32;
+        numLatitudeLines = 128,
+        numLongitudeLines = 128;
     static const float radius = 0.5f;
     static const float latitudeSpacing = 1.0f / numLatitudeLines;
     static const float longitudeSpacing = 1.0f / numLongitudeLines;
@@ -312,7 +290,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     vertexBufferData.pSysMem = vertices.data();
     vertexBufferData.SysMemPitch = 0;
     vertexBufferData.SysMemSlicePitch = 0;
-    CD3D11_BUFFER_DESC vertexBufferDesc(vertices.size() *
+    CD3D11_BUFFER_DESC vertexBufferDesc((UINT)vertices.size() *
         sizeof(VertexPositionColorNormal), D3D11_BIND_VERTEX_BUFFER);
     DX::ThrowIfFailed(
         m_deviceResources->GetD3DDevice()->CreateBuffer(
@@ -347,7 +325,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     indexBufferData.pSysMem = indices.data();
     indexBufferData.SysMemPitch = 0;
     indexBufferData.SysMemSlicePitch = 0;
-    CD3D11_BUFFER_DESC indexBufferDesc(indices.size() * sizeof(short),
+    CD3D11_BUFFER_DESC indexBufferDesc((UINT)indices.size() * sizeof(short),
         D3D11_BIND_INDEX_BUFFER);
     DX::ThrowIfFailed(
         m_deviceResources->GetD3DDevice()->CreateBuffer(
@@ -365,6 +343,8 @@ void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
     m_pixelShader.Reset();
     m_constantBuffer.Reset();
     m_lightConstantBuffer.Reset();
+    m_materialConstantBuffer.Reset();
+    m_generalConstantBuffer.Reset();
     m_vertexBuffer.Reset();
     m_indexBuffer.Reset();
 }
