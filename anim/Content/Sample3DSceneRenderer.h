@@ -23,8 +23,6 @@ namespace anim
         void Render();
 
     private:
-        void Rotate(float radians);
-
         // Cached pointer to device resources.
         std::shared_ptr<DX::DeviceResources> m_deviceResources;
 
@@ -47,10 +45,6 @@ namespace anim
         ModelViewProjectionConstantBuffer    m_constantBufferData;
         LightConstantBuffer                  m_lightConstantBufferData;
         size_t                               m_indexCount;
-
-        // Variables used with the rendering loop.
-        float   m_degreesPerSecond;
-        bool    m_tracking;
 
         // Lights information
 
