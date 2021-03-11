@@ -200,6 +200,14 @@ void AnimMain::InputUpdate(DX::StepTimer const& timer)
     {
         m_camera->AdjustPosition(0.0f, -cameraSpeed, 0.0f);
     }
+
+    if (m_keyboard->KeyWasReleased('3'))
+        isHDR = true;
+    if (m_keyboard->KeyWasReleased('4') ||
+        m_keyboard->KeyWasReleased('5') ||
+        m_keyboard->KeyWasReleased('6'))
+        isHDR = false;
+
 }
 
 // Updates the application state once per frame.
@@ -243,7 +251,7 @@ void AnimMain::UnbindShaderResource() const
 
 // Renders the current frame according to the current application state.
 // Returns true if the frame was rendered and is ready to be displayed.
-bool AnimMain::Render() 
+bool AnimMain::Render()
 {
     // Don't try to render anything before the first Update.
     if (m_timer.GetFrameCount() == 0)
@@ -255,7 +263,14 @@ bool AnimMain::Render()
 
     // Set scene render target
     UnbindShaderResource();
-    context->OMSetRenderTargets(1, m_sceneRenderTarget.renderTargetView.GetAddressOf(), m_deviceResources->GetDepthStencilView());
+    if (isHDR)
+        context->OMSetRenderTargets(1, m_sceneRenderTarget.renderTargetView.GetAddressOf(), m_deviceResources->GetDepthStencilView());
+    else
+    {
+        ID3D11RenderTargetView * const rt[] = { m_deviceResources->GetBackBufferRenderTargetView() };
+        context->OMSetRenderTargets(1, rt, m_deviceResources->GetDepthStencilView());
+    }
+
     context->RSSetViewports(1, &m_sceneRenderTarget.viewport);
 
     // Clear back buffer, averaging textures and depth stencil view.
@@ -268,62 +283,65 @@ bool AnimMain::Render()
     // Render the 3d scene
     m_sceneRenderer->Render();
 
-    // Render post-proccessing texture to the screen
-    auto annotation = m_deviceResources->GetAnnotation();
-    annotation->BeginEvent(L"Post-Proccessing");
-    annotation->BeginEvent(L"Calculate frame average brightness");
-    // Attach copy texture vertex shader
-    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+    if (isHDR)
+    {
+        // Render post-proccessing texture to the screen
+        auto annotation = m_deviceResources->GetAnnotation();
+        annotation->BeginEvent(L"Post-Proccessing");
+        annotation->BeginEvent(L"Calculate frame average brightness");
+        // Attach copy texture vertex shader
+        context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 
-    // Calculate log of scene brightness
-    context->PSSetShader(m_brightnessPixelShader.Get(), nullptr, 0);
-    copyTexture(m_sceneRenderTarget, m_averagingRenderTargets.front());
+        // Calculate log of scene brightness
+        context->PSSetShader(m_brightnessPixelShader.Get(), nullptr, 0);
+        copyTexture(m_sceneRenderTarget, m_averagingRenderTargets.front());
 
-    // Continuously copy to smaller textures
-    context->PSSetShader(m_copyPixelShader.Get(), nullptr, 0);
-    for (size_t i = 1; i < m_averagingRenderTargets.size(); i++)
-        copyTexture(m_averagingRenderTargets[i - 1], m_averagingRenderTargets[i]);
-    annotation->EndEvent(); // Calculate frame average brightness
+        // Continuously copy to smaller textures
+        context->PSSetShader(m_copyPixelShader.Get(), nullptr, 0);
+        for (size_t i = 1; i < m_averagingRenderTargets.size(); i++)
+            copyTexture(m_averagingRenderTargets[i - 1], m_averagingRenderTargets[i]);
+        annotation->EndEvent(); // Calculate frame average brightness
 
-    annotation->BeginEvent(L"Render with HDR to screen");
-    // Set render target to screen
-    ID3D11RenderTargetView *const targets[1] = { m_deviceResources->GetBackBufferRenderTargetView() };
-    UnbindShaderResource();
-    context->OMSetRenderTargets(1, targets, nullptr);
-    // Reset the viewport to target the whole screen.
-    auto viewport = m_deviceResources->GetScreenViewport();
-    context->RSSetViewports(1, &viewport);
-    // Attach HDR shader
-    context->PSSetShader(m_hdrPixelShader.Get(), nullptr, 0);
+        annotation->BeginEvent(L"Render with HDR to screen");
+        // Set render target to screen
+        ID3D11RenderTargetView *const targets[1] = { m_deviceResources->GetBackBufferRenderTargetView() };
+        UnbindShaderResource();
+        context->OMSetRenderTargets(1, targets, nullptr);
+        // Reset the viewport to target the whole screen.
+        auto viewport = m_deviceResources->GetScreenViewport();
+        context->RSSetViewports(1, &viewport);
+        // Attach HDR shader
+        context->PSSetShader(m_hdrPixelShader.Get(), nullptr, 0);
 
-    // Calculate adapted average brightness
-    context->CopyResource(m_averageBrightnessCPUAccTexture.Get(),
-        m_averagingRenderTargets.back().texture.Get());
-    DX::ThrowIfFailed(
-        context->Map(
-            m_averageBrightnessCPUAccTexture.Get(),
-            0,
-            D3D11_MAP_READ,
-            0,
-            &m_averageBrightnessAccessor
-        )
-    );
-    float averageLogBrightness = *(float *)m_averageBrightnessAccessor.pData;
-    m_adaptedAverageLogBrightness += (averageLogBrightness - m_adaptedAverageLogBrightness) *
-        (float)(1 - std::exp(-m_timer.GetElapsedSeconds() / m_adaptationTime));
-    context->Unmap(m_averageBrightnessCPUAccTexture.Get(), 0);
+        // Calculate adapted average brightness
+        context->CopyResource(m_averageBrightnessCPUAccTexture.Get(),
+            m_averagingRenderTargets.back().texture.Get());
+        DX::ThrowIfFailed(
+            context->Map(
+                m_averageBrightnessCPUAccTexture.Get(),
+                0,
+                D3D11_MAP_READ,
+                0,
+                &m_averageBrightnessAccessor
+            )
+        );
+        float averageLogBrightness = *(float *)m_averageBrightnessAccessor.pData;
+        m_adaptedAverageLogBrightness += (averageLogBrightness - m_adaptedAverageLogBrightness) *
+            (float)(1 - std::exp(-m_timer.GetElapsedSeconds() / m_adaptationTime));
+        context->Unmap(m_averageBrightnessCPUAccTexture.Get(), 0);
 
-    //Set constant buffer parameter
-    m_postProcData.averageLogBrightness = m_adaptedAverageLogBrightness;
-    context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL,
-        &m_postProcData, 0, 0);
-    context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
-    // Set scene texture as shader resource
-    context->PSSetShaderResources(0, 1, m_sceneRenderTarget.shaderResourceView.GetAddressOf());
-    // Render full-screen quad
-    context->Draw(4, 0);
-    annotation->EndEvent(); // Render with HDR to screen
-    annotation->EndEvent(); // Post-proccessing
+        //Set constant buffer parameter
+        m_postProcData.averageLogBrightness = m_adaptedAverageLogBrightness;
+        context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL,
+            &m_postProcData, 0, 0);
+        context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+        // Set scene texture as shader resource
+        context->PSSetShaderResources(0, 1, m_sceneRenderTarget.shaderResourceView.GetAddressOf());
+        // Render full-screen quad
+        context->Draw(4, 0);
+        annotation->EndEvent(); // Render with HDR to screen
+        annotation->EndEvent(); // Post-proccessing
+    }
 
     // Render GUI
     m_fpsTextRenderer->Render();

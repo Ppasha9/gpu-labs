@@ -95,6 +95,8 @@ namespace anim
         float m_adaptedAverageLogBrightness = 0;
         float m_adaptationTime = 2;
 
+        bool isHDR = true;
+
         D3D11_MAPPED_SUBRESOURCE m_averageBrightnessAccessor;
 
         // Create texture of given size and bind it as render target and shader resource

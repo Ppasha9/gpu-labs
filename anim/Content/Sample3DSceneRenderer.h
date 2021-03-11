@@ -38,6 +38,9 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_indexBuffer;
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pixelShader;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_normDistrPixelShader;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_geomPixelShader;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_fresnelPixelShader;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_constantBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_lightConstantBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_materialConstantBuffer;
@@ -48,6 +51,14 @@ namespace anim
         GeneralConstantBuffer                m_generalConstantBufferData;
 
         size_t                               m_indexCount;
+
+        enum struct PBRShaderMode
+        {
+            REGULAR,
+            NORMAL_DISTRIBUTION,
+            GEOMETRY,
+            FRESNEL
+        } m_shaderMode;
 
         // Lights information
         LightConstantBuffer                  m_lightConstantBufferData;

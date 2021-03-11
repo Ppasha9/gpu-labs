@@ -130,10 +130,22 @@
     <FxCompile Include="Content\PBRPixelShader.hlsl">
       <Filter>Source Files\Content\PBR</Filter>
     </FxCompile>
+    <FxCompile Include="Content\NormalDistributionPixelShader.hlsl">
+      <Filter>Source Files\Content\PBR</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\GeometryPixelShader.hlsl">
+      <Filter>Source Files\Content\PBR</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\FresnelPixelShader.hlsl">
+      <Filter>Source Files\Content\PBR</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Content\noiseSimplex.cginc">
       <Filter>Source Files\Content</Filter>
+    </None>
+    <None Include="Content\PBRInclude.cginc">
+      <Filter>Source Files\Content\PBR</Filter>
     </None>
   </ItemGroup>
 </Project>

@@ -17,7 +17,8 @@ Sample3DSceneRenderer::Sample3DSceneRenderer(
     m_indexCount(0),
     m_deviceResources(deviceResources),
     m_camera(camera),
-    m_keyboard(keyboard)
+    m_keyboard(keyboard),
+    m_shaderMode(PBRShaderMode::REGULAR)
 {
     CreateDeviceDependentResources();
     CreateWindowSizeDependentResources();
@@ -81,6 +82,15 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
     //if (m_keyboard->KeyWasReleased('3'))
     //    CycleLight(2);
 
+    if (m_keyboard->KeyWasReleased('3'))
+        m_shaderMode = PBRShaderMode::REGULAR;
+    if (m_keyboard->KeyWasReleased('4'))
+        m_shaderMode = PBRShaderMode::NORMAL_DISTRIBUTION;
+    if (m_keyboard->KeyWasReleased('5'))
+        m_shaderMode = PBRShaderMode::GEOMETRY;
+    if (m_keyboard->KeyWasReleased('6'))
+        m_shaderMode = PBRShaderMode::FRESNEL;
+
     // Update the view matrix, cause it can be changed by input
     XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
 
@@ -127,7 +137,21 @@ void Sample3DSceneRenderer::Render()
     context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
 
     // Attach our pixel shader.
-    context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+    switch (m_shaderMode)
+    {
+    case PBRShaderMode::REGULAR:
+        context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+        break;
+    case PBRShaderMode::NORMAL_DISTRIBUTION:
+        context->PSSetShader(m_normDistrPixelShader.Get(), nullptr, 0);
+        break;
+    case PBRShaderMode::GEOMETRY:
+        context->PSSetShader(m_geomPixelShader.Get(), nullptr, 0);
+        break;
+    case PBRShaderMode::FRESNEL:
+        context->PSSetShader(m_fresnelPixelShader.Get(), nullptr, 0);
+        break;
+    }
     context->PSSetConstantBuffers(2, 1, m_generalConstantBuffer.GetAddressOf());
 
     annotation->EndEvent();
@@ -224,6 +248,9 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
     // Create pixel shader
     m_pixelShader = m_deviceResources->createPixelShader("PBR");
+    m_normDistrPixelShader = m_deviceResources->createPixelShader("NormalDistribution");
+    m_geomPixelShader = m_deviceResources->createPixelShader("Geometry");
+    m_fresnelPixelShader = m_deviceResources->createPixelShader("Fresnel");
 
     // Create MVP matrices constast buffer
     CD3D11_BUFFER_DESC constantBufferDesc(sizeof(ModelViewProjectionConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
@@ -365,6 +392,9 @@ void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
     m_vertexShader.Reset();
     m_inputLayout.Reset();
     m_pixelShader.Reset();
+    m_normDistrPixelShader.Reset();
+    m_geomPixelShader.Reset();
+    m_fresnelPixelShader.Reset();
     m_constantBuffer.Reset();
     m_lightConstantBuffer.Reset();
     m_materialConstantBuffer.Reset();
