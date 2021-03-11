@@ -3,7 +3,7 @@
 static const float3 lightPos[3] =
 {
     float3(0.0f, 0.0f, 3.0f),
-    float3(0.3f, 1.0f, -0.3f),
+    float3(2.0f, 1.0f, 1.0f),
     float3(0, 1.0f, 0.3f)
 };
 
@@ -55,7 +55,7 @@ float3 h(float3 wi, float3 wo)
 
 float normalDistribution(float3 n, float3 wi, float3 wo)
 {
-    float roughSqr = sqr(roughness);
+    float roughSqr = sqr(max(roughness, 0.01f));
     return roughSqr / (PI * sqr(sqr(myDot(n, h(wi, wo))) * (roughSqr - 1) + 1));
 }
 
@@ -89,7 +89,7 @@ float3 cookTorranceBRDF(float3 p, float3 n, float3 wi, float3 wo)
 
 float3 Li(int lightIdx, float3 p)
 {
-    float attenuation = 1 / (1 + sqr(distance(p, lightPos[lightIdx])));
+    float attenuation = 1 / (1 + 0.30f * sqr(distance(p, lightPos[lightIdx])));
 
     return lightColor[lightIdx].rgb * lightColor[lightIdx].a * attenuation;
 }

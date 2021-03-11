@@ -38,7 +38,7 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
     );
 
     // Eye is at (0,0.7,1.5), looking at point (0,-0.1,0) with the up-vector along the y-axis.
-    static const XMFLOAT3 eye = { 0.0f, 0.7f, 1.5f };
+    static const XMFLOAT3 eye = { 0.0f, 0.0f, 5.0f };
     static const XMFLOAT3 at = { 0.0f, 0.0f, 0.0f };
 
     m_camera->SetPosition(XMLoadFloat3(&eye));
@@ -50,7 +50,7 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 void Sample3DSceneRenderer::CycleLight(int lightId)
 {
     static int lightState[3] = { 0, 0, 0 };
-    static const float strengths[] = { 1, 10, 100 };
+    static const float strengths[] = { 0, 10, 100, 300, 1000 };
     static const int stateN = sizeof(strengths) / sizeof(float);
     auto nextState = [](int curState) -> int
     {
@@ -61,20 +61,28 @@ void Sample3DSceneRenderer::CycleLight(int lightId)
     m_strengths[lightId] = strengths[lightState[lightId]];
 }
 
-// Called once per frame, rotates the sphere and calculates the model and view matrices.
+void Sample3DSceneRenderer::SetMaterial(MaterialConstantBuffer material)
+{
+    m_materialConstantBufferData = material;
+
+    auto context = m_deviceResources->GetD3DDeviceContext();
+
+    context->UpdateSubresource(m_materialConstantBuffer.Get(), 0, NULL,
+        &m_materialConstantBufferData, 0, 0);
+    context->PSSetConstantBuffers(1, 1, m_materialConstantBuffer.GetAddressOf());
+}
+
 void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 {
     if (m_keyboard->KeyWasReleased('1'))
         CycleLight(0);
     if (m_keyboard->KeyWasReleased('2'))
         CycleLight(1);
-    if (m_keyboard->KeyWasReleased('3'))
-        CycleLight(2);
+    //if (m_keyboard->KeyWasReleased('3'))
+    //    CycleLight(2);
 
     // Update the view matrix, cause it can be changed by input
     XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
-
-    XMStoreFloat4x4(&m_constantBufferData.model, XMMatrixIdentity());
 
     m_lightConstantBufferData.lightColor1 = XMFLOAT4(LIGHT_COLOR_1.x, LIGHT_COLOR_1.y, LIGHT_COLOR_1.z, m_strengths[0]);
     m_lightConstantBufferData.lightColor2 = XMFLOAT4(LIGHT_COLOR_2.x, LIGHT_COLOR_2.y, LIGHT_COLOR_2.z, m_strengths[1]);
@@ -82,10 +90,6 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 
     m_generalConstantBufferData.cameraPos = m_camera->GetPositionFloat3();
     m_generalConstantBufferData.time = (float)timer.GetTotalSeconds();
-
-    m_materialConstantBufferData.albedo = XMFLOAT3(1, 0, 0);
-    m_materialConstantBufferData.roughness = 0.5f * (1 + sin(timer.GetTotalSeconds()));
-    m_materialConstantBufferData.metalness = 0.5f * (1 + cos(timer.GetTotalSeconds() / 2));
 }
 
 // Renders one frame using the vertex and pixel shaders.
@@ -98,11 +102,8 @@ void Sample3DSceneRenderer::Render()
     annotation->BeginEvent(L"SetSphereGeometry");
 
     // Prepare the constant buffer to send it to the graphics device.
-    context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL, &m_constantBufferData, 0, 0);
     context->UpdateSubresource(m_lightConstantBuffer.Get(), 0, NULL,
         &m_lightConstantBufferData, 0, 0);
-    context->UpdateSubresource(m_materialConstantBuffer.Get(), 0, NULL,
-        &m_materialConstantBufferData, 0, 0);
     context->UpdateSubresource(m_generalConstantBuffer.Get(), 0, NULL,
         &m_generalConstantBufferData, 0, 0);
 
@@ -127,20 +128,43 @@ void Sample3DSceneRenderer::Render()
 
     // Attach our pixel shader.
     context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
-
-    context->PSSetConstantBuffers(0, 1, m_lightConstantBuffer.GetAddressOf());
-    context->PSSetConstantBuffers(1, 1, m_materialConstantBuffer.GetAddressOf());
     context->PSSetConstantBuffers(2, 1, m_generalConstantBuffer.GetAddressOf());
 
     annotation->EndEvent();
 
     annotation->BeginEvent(L"RenderSphere");
-    // Draw the objects.
-    context->DrawIndexed(
-        (UINT)m_indexCount,
-        0,
-        0
-    );
+
+    static const int sphereGridSize = 10;
+    static const float gridWidth = 5;
+    for (int i = 0; i < sphereGridSize; i++)
+        for (int j = 0; j < sphereGridSize; j++)
+        {
+            XMStoreFloat4x4(
+                &m_constantBufferData.model,
+                XMMatrixTranspose(XMMatrixTranslation(
+                    gridWidth * (i / (sphereGridSize - 1.0f) - 0.5f),
+                    gridWidth * (j / (sphereGridSize - 1.0f) - 0.5f),
+                    0
+                ))
+            );
+            context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL, &m_constantBufferData, 0, 0);
+            context->PSSetConstantBuffers(0, 1, m_lightConstantBuffer.GetAddressOf());
+
+            SetMaterial(
+                {
+                    XMFLOAT3(1, 0, 0),
+                    i / (sphereGridSize - 1.0f),
+                    j / (sphereGridSize - 1.0f)
+                }
+            );
+
+            context->DrawIndexed(
+                (UINT)m_indexCount,
+                0,
+                0
+            );
+        }
+
     annotation->EndEvent();
 }
 

@@ -55,13 +55,15 @@ namespace anim
 
         // Constant colors
         const DirectX::XMFLOAT3 LIGHT_COLOR_1 = DirectX::XMFLOAT3(1.0f, 1.0f, 0.8f);
-        const DirectX::XMFLOAT3 LIGHT_COLOR_2 = DirectX::XMFLOAT3(1.0f, 1.0f, 0.8f);
+        const DirectX::XMFLOAT3 LIGHT_COLOR_2 = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
         const DirectX::XMFLOAT3 LIGHT_COLOR_3 = DirectX::XMFLOAT3(1.0f, 0.0f, 0.0f);
 
         // Variable strength
-        float m_strengths[3] = { 1.0f, 1.0f, 1.0f };
+        float m_strengths[3] = { 0.0f, 0.0f, 0.0f };
 
         void CycleLight(int lightId);
+
+        void SetMaterial(MaterialConstantBuffer material);
     };
 }
 
