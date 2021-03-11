@@ -25,6 +25,12 @@
     <Filter Include="Source Files\Content\PBR">
       <UniqueIdentifier>{e3b730d7-575b-4f5d-8642-2af66ff1937d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Content\Unlit">
+      <UniqueIdentifier>{840ebc53-7e4d-45c4-b3e9-6fd21b7416e8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Common\WIC Texture Loader">
+      <UniqueIdentifier>{616d050d-cb2c-47df-b1ff-103be6768d58}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common\DeviceResources.h">
@@ -69,6 +75,9 @@
     <ClInclude Include="Common\Input\Mouse.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Content\WICTextureLoader.h">
+      <Filter>Source Files\Common\WIC Texture Loader</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common\DeviceResources.cpp">
@@ -107,6 +116,9 @@
     <ClCompile Include="Common\Input\Mouse.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Content\WICTextureLoader.cpp">
+      <Filter>Source Files\Common\WIC Texture Loader</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Content\SamplePixelShader.hlsl">
@@ -138,6 +150,15 @@
     </FxCompile>
     <FxCompile Include="Content\FresnelPixelShader.hlsl">
       <Filter>Source Files\Content\PBR</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\UnlitPixelShader.hlsl">
+      <Filter>Source Files\Content\Unlit</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\UnlitVertexShader.hlsl">
+      <Filter>Source Files\Content\Unlit</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\UnlitInclude.cginc">
+      <Filter>Source Files\Content\Unlit</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

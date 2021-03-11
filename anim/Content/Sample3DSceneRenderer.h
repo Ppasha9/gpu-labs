@@ -35,16 +35,26 @@ namespace anim
         // Direct3D resources for cube geometry.
         Microsoft::WRL::ComPtr<ID3D11InputLayout>  m_inputLayout;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_vertexBuffer;
+        Microsoft::WRL::ComPtr<ID3D11Buffer>       m_skySphereVertexBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_indexBuffer;
+
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pixelShader;
+
+        Microsoft::WRL::ComPtr<ID3D11VertexShader> m_unlitVertexShader;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_unlitPixelShader;
+
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_normDistrPixelShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_geomPixelShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_fresnelPixelShader;
+
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_constantBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_lightConstantBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_materialConstantBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_generalConstantBuffer;
+
+        Microsoft::WRL::ComPtr<ID3D11Resource> m_skySphereTexture;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_skySphereShaderResourceView;
 
         ModelViewProjectionConstantBuffer    m_constantBufferData;
         MaterialConstantBuffer               m_materialConstantBufferData;

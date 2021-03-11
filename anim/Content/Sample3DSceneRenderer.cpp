@@ -1,5 +1,6 @@
 ﻿#include "pch.h"
 #include "Sample3DSceneRenderer.h"
+#include "WICTextureLoader.h"
 
 #include "..\Common\DirectXHelper.h"
 #include "..\Common\StepTimer.h"
@@ -31,7 +32,7 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
     float aspectRatio = outputSize.width / outputSize.height;
     float fovAngleY = 70.0f * XM_PI / 180.0f;
 
-    m_camera->SetProjectionValues(70.0f, aspectRatio, 0.01f, 100.0f);
+    m_camera->SetProjectionValues(70.0f, aspectRatio, 0.01f, 1000.0f);
 
     XMStoreFloat4x4(
         &m_constantBufferData.projection,
@@ -106,10 +107,7 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 void Sample3DSceneRenderer::Render()
 {
     auto context = m_deviceResources->GetD3DDeviceContext();
-
     auto annotation = m_deviceResources->GetAnnotation();
-
-    annotation->BeginEvent(L"SetSphereGeometry");
 
     // Prepare the constant buffer to send it to the graphics device.
     context->UpdateSubresource(m_lightConstantBuffer.Get(), 0, NULL,
@@ -120,22 +118,53 @@ void Sample3DSceneRenderer::Render()
     // Each vertex is one instance of the VertexPositionColor struct.
     UINT stride = sizeof(VertexPositionColorNormal);
     UINT offset = 0;
-    context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
-
     context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
-
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
     context->IASetInputLayout(m_inputLayout.Get());
-    annotation->EndEvent();
-
-    annotation->BeginEvent(L"AttachShaders");
-    // Attach our vertex shader.
-    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 
     // Send the constant buffer to the graphics device.
     context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+    context->PSSetConstantBuffers(0, 1, m_lightConstantBuffer.GetAddressOf());
 
+    annotation->BeginEvent(L"RenderSkySphere");
+    // Set sky sphere texture and shaders
+    context->VSSetShader(m_unlitVertexShader.Get(), nullptr, 0);
+    context->PSSetShader(m_unlitPixelShader.Get(), nullptr, 0);
+    context->PSSetShaderResources(0, 1, m_skySphereShaderResourceView.GetAddressOf());
+    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
+
+    // Set sky sphere geometry
+    context->IASetVertexBuffers(0, 1, m_skySphereVertexBuffer.GetAddressOf(), &stride, &offset);
+    // Set scale matrix
+    XMStoreFloat4x4(
+        &m_constantBufferData.model,
+        //XMMatrixIdentity()
+        XMMatrixMultiplyTranspose(
+            //XMMatrixIdentity(),
+            XMMatrixScaling(
+                999,
+                999,
+                999
+            ),
+            XMMatrixTranslationFromVector(m_camera->GetPositionVector())
+        )
+    );
+    context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL, &m_constantBufferData, 0, 0);
+
+    // Render sky sphere
+    context->DrawIndexed(
+        (UINT)m_indexCount,
+        0,
+        0
+    );
+    annotation->EndEvent(); // RenderSkySphere
+
+    annotation->BeginEvent(L"RenderSphereGrid");
+
+    // Set sphere geometry
+    context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
+    // Attach our vertex shader.
+    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
     // Attach our pixel shader.
     switch (m_shaderMode)
     {
@@ -154,10 +183,6 @@ void Sample3DSceneRenderer::Render()
     }
     context->PSSetConstantBuffers(2, 1, m_generalConstantBuffer.GetAddressOf());
 
-    annotation->EndEvent();
-
-    annotation->BeginEvent(L"RenderSphere");
-
     static const int sphereGridSize = 10;
     static const float gridWidth = 5;
     for (int i = 0; i < sphereGridSize; i++)
@@ -172,7 +197,6 @@ void Sample3DSceneRenderer::Render()
                 ))
             );
             context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL, &m_constantBufferData, 0, 0);
-            context->PSSetConstantBuffers(0, 1, m_lightConstantBuffer.GetAddressOf());
 
             SetMaterial(
                 {
@@ -196,7 +220,6 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 {
     // Load shaders
     std::vector<byte> vsData;
-
     bool success = false;
     try
     {
@@ -207,7 +230,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 #endif // DEBUG
         success = true;
     }
-    catch (std::exception&)
+    catch (std::exception &)
     {
     }
     if (!success)
@@ -215,9 +238,11 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         vsData = DX::ReadData("SampleVertexShader.cso");
     }
 
+    auto device = m_deviceResources->GetD3DDevice();
+
     // After the vertex shader file is loaded, create the shader and input layout.
     DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreateVertexShader(
+        device->CreateVertexShader(
             vsData.data(),
             vsData.size(),
             nullptr,
@@ -237,7 +262,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     };
 
     DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreateInputLayout(
+        device->CreateInputLayout(
             vertexDesc,
             ARRAYSIZE(vertexDesc),
             vsData.data(),
@@ -246,7 +271,10 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         )
     );
 
+    m_unlitVertexShader = m_deviceResources->createVertexShader("Unlit");
+
     // Create pixel shader
+    m_unlitPixelShader = m_deviceResources->createPixelShader("Unlit");
     m_pixelShader = m_deviceResources->createPixelShader("PBR");
     m_normDistrPixelShader = m_deviceResources->createPixelShader("NormalDistribution");
     m_geomPixelShader = m_deviceResources->createPixelShader("Geometry");
@@ -255,7 +283,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     // Create MVP matrices constast buffer
     CD3D11_BUFFER_DESC constantBufferDesc(sizeof(ModelViewProjectionConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
     DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreateBuffer(
+        device->CreateBuffer(
             &constantBufferDesc,
             nullptr,
             &m_constantBuffer
@@ -264,7 +292,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
     CD3D11_BUFFER_DESC lightConstantBufferDesc(sizeof(LightConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
     DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreateBuffer(
+        device->CreateBuffer(
             &lightConstantBufferDesc,
             nullptr,
             &m_lightConstantBuffer
@@ -273,7 +301,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
     CD3D11_BUFFER_DESC materialConstantBufferDesc(sizeof(MaterialConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
     DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreateBuffer(
+        device->CreateBuffer(
             &materialConstantBufferDesc,
             nullptr,
             &m_materialConstantBuffer
@@ -282,7 +310,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
     CD3D11_BUFFER_DESC generalConstantBufferDesc(sizeof(GeneralConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
     DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreateBuffer(
+        device->CreateBuffer(
             &generalConstantBufferDesc,
             nullptr,
             &m_generalConstantBuffer
@@ -299,9 +327,9 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
     static std::vector<VertexPositionColorNormal> vertices;
 
-    for(int latitude = 0; latitude <= numLatitudeLines; latitude++)
+    for (int latitude = 0; latitude <= numLatitudeLines; latitude++)
     {
-        for(int longitude = 0; longitude <= numLongitudeLines; longitude++)
+        for (int longitude = 0; longitude <= numLongitudeLines; longitude++)
         {
             VertexPositionColorNormal v;
 
@@ -344,17 +372,39 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     CD3D11_BUFFER_DESC vertexBufferDesc((UINT)vertices.size() *
         sizeof(VertexPositionColorNormal), D3D11_BIND_VERTEX_BUFFER);
     DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreateBuffer(
+        device->CreateBuffer(
             &vertexBufferDesc,
             &vertexBufferData,
             &m_vertexBuffer
         )
     );
+    std::string name = "SphereVertexBuffer";
+    m_vertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
+        name.c_str());
 
-    std::string modelName = "Sphere";
-    m_vertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)modelName.size(),
-        modelName.c_str());
+    // Create sky sphere vertex buffer
+    for (auto &v : vertices)
+    {
+        v.pos.x = -v.pos.x;
+        v.pos.y = -v.pos.y;
+        v.pos.z = -v.pos.z;
+    
+        v.normal.x = -v.normal.x;
+        v.normal.y = -v.normal.y;
+        v.normal.z = -v.normal.z;
+    }
+    DX::ThrowIfFailed(
+        device->CreateBuffer(
+            &vertexBufferDesc,
+            &vertexBufferData,
+            &m_skySphereVertexBuffer
+        )
+    );
+    name = "SkySphereVertexBuffer";
+    m_skySphereVertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName,
+        (UINT)name.size(), name.c_str());
 
+    // create sphere index buffer
     static std::vector<unsigned short> indices;
     for (int latitude = 0; latitude < numLatitudeLines; latitude++)
     {
@@ -379,12 +429,46 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     CD3D11_BUFFER_DESC indexBufferDesc((UINT)indices.size() * sizeof(short),
         D3D11_BIND_INDEX_BUFFER);
     DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreateBuffer(
+        device->CreateBuffer(
             &indexBufferDesc,
             &indexBufferData,
             &m_indexBuffer
         )
     );
+    name = "SphereIndexBuffer";
+    m_skySphereVertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName,
+        (UINT)name.size(), name.c_str());
+
+    // Load sky sphere texture
+    success = false;
+    try
+    {
+        DX::ThrowIfFailed(
+            CreateWICTextureFromFile(
+                m_deviceResources->GetD3DDevice(),
+                m_deviceResources->GetD3DDeviceContext(),
+                L"skysphere.jpg",
+                &m_skySphereTexture,
+                &m_skySphereShaderResourceView
+            )
+        );
+        success = true;
+    }
+    catch (std::exception &)
+    {
+    }
+    if (!success)
+    {
+        DX::ThrowIfFailed(
+            CreateWICTextureFromFile(
+                m_deviceResources->GetD3DDevice(),
+                m_deviceResources->GetD3DDeviceContext(),
+                L"..\\..\\skysphere.jpg",
+                &m_skySphereTexture,
+                &m_skySphereShaderResourceView
+            )
+        );
+    }
 }
 
 void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
