@@ -318,8 +318,8 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     );
 
     static const int
-        numLatitudeLines = 128,
-        numLongitudeLines = 128;
+        numLatitudeLines = 16,
+        numLongitudeLines = 16;
     static const float radius = 0.5f;
     static const float latitudeSpacing = 1.0f / numLatitudeLines;
     static const float longitudeSpacing = 1.0f / numLongitudeLines;

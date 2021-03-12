@@ -47,7 +47,7 @@ float myDot(float3 a, float3 b)
 
 float3 h(float3 wi, float3 wo)
 {
-    return normalize((wi + wo) / 2);
+    return normalize(wi + wo);
 }
 
 float normalDistribution(float3 n, float3 wi, float3 wo)
@@ -68,17 +68,17 @@ float geometry(float3 n, float3 wi, float3 wo)
     return SchlickGGX(n, wi, k) * SchlickGGX(n, wo, k);
 }
 
-float3 fresnel(float3 wi, float3 wo)
+float3 fresnel(float3 n, float3 wi, float3 wo)
 {
     float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metalness);
-    return F0 + (1 - F0) * pow(1 - myDot(h(wi, wo), wo), 5);
+    return (F0 + (1 - F0) * pow(1 - myDot(h(wi, wo), wo), 5)) * sign(myDot(wi, n));
 }
 
 float3 cookTorranceBRDF(float3 p, float3 n, float3 wi, float3 wo)
 {
     float D = normalDistribution(n, wi, wo);
     float G = geometry(n, wi, wo);
-    float3 F = fresnel(wi, wo);
+    float3 F = fresnel(n, wi, wo);
 
     return (1 - F) * albedo / PI * (1 - metalness) +
         D * F * G / (0.001f + 4 * (myDot(wi, n) * myDot(wo, n)));
