@@ -80,7 +80,8 @@ void Sample3DSceneRenderer::SetMaterial(MaterialConstantBuffer material)
 
 void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 {
-    renderCubemapTexture();
+    if (timer.GetFrameCount() == 2)
+        renderCubemapTexture();
 
     if (m_keyboard->KeyWasReleased('1'))
         CycleLight(0);
@@ -135,11 +136,9 @@ void Sample3DSceneRenderer::Render()
 
     annotation->BeginEvent(L"RenderSkySphere");
     // Set sky sphere texture and shaders
-    //context->VSSetShader(m_unlitVertexShader.Get(), nullptr, 0);
-    //context->PSSetShader(m_unlitPixelShader.Get(), nullptr, 0);
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
     context->PSSetShader(m_skySpherePixelShader.Get(), nullptr, 0);
-    //context->PSSetShaderResources(0, 1, m_skySphereShaderResourceView.GetAddressOf());
+
     context->PSSetShaderResources(0, 1, m_skyCubeMapShaderResourceView.GetAddressOf());
     context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
 
@@ -148,9 +147,7 @@ void Sample3DSceneRenderer::Render()
     // Set scale matrix
     XMStoreFloat4x4(
         &m_constantBufferData.model,
-        //XMMatrixIdentity()
         XMMatrixMultiplyTranspose(
-            //XMMatrixIdentity(),
             XMMatrixScaling(
                 999,
                 999,
@@ -467,7 +464,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         loadTexture("..\\..\\skysphere.hdr");
     }
 
-    renderCubemapTexture();
+    /// renderCubemapTexture();
 }
 
 void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
@@ -614,7 +611,7 @@ void Sample3DSceneRenderer::renderCubemapTexture()
         // Render full-screen quad
         ///context->ClearRenderTargetView(rt.renderTargetView.Get(), DirectX::Colors::Black);
         context->ClearRenderTargetView(rt.renderTargetView.Get(), clrs[i]);
-        ///context->DrawIndexed((UINT)indices.size(), 0, 0);
+        context->DrawIndexed((UINT)indices.size(), 0, 0);
 
         // Copy render target contents to cube map
         context->CopySubresourceRegion(
