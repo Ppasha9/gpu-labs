@@ -356,7 +356,7 @@ void DX::DeviceResources::Present()
     DX::ThrowIfFailed(hr);
 }
 
-Microsoft::WRL::ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader(
+ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader(
     const std::string &namePrefix) const
 {
     ComPtr<ID3D11PixelShader> output;
@@ -393,7 +393,7 @@ Microsoft::WRL::ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader
     return output;
 }
 
-Microsoft::WRL::ComPtr<ID3D11VertexShader> DX::DeviceResources::createVertexShader(
+ComPtr<ID3D11VertexShader> DX::DeviceResources::createVertexShader(
     const std::string &namePrefix) const
 {
     ComPtr<ID3D11VertexShader> output;
@@ -428,4 +428,23 @@ Microsoft::WRL::ComPtr<ID3D11VertexShader> DX::DeviceResources::createVertexShad
         shaderName.c_str());
 
     return output;
+}
+
+ComPtr<ID3D11ShaderResourceView> DX::DeviceResources::createShaderResourceView(
+    ComPtr<ID3D11Texture2D> texture, const std::string &namePrefix) const
+{
+    ComPtr<ID3D11ShaderResourceView> shaderResource;
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateShaderResourceView(
+            texture.Get(),
+            nullptr,
+            &shaderResource
+        )
+    );
+    std::string name = namePrefix + "ShaderResourceView";
+    shaderResource->SetPrivateData(WKPDID_D3DDebugObjectName,
+        (UINT)name.size(), name.c_str());
+
+    return shaderResource;
 }

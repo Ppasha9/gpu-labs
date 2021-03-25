@@ -108,16 +108,8 @@ AnimMain::RenderTargetTexture AnimMain::createRenderTargetTexture(
         name.c_str());
 
     // Create post-proccessing texture shader resource view
-    DX::ThrowIfFailed(
-        device->CreateShaderResourceView(
-            output.texture.Get(),
-            nullptr,
-            &output.shaderResourceView
-        )
-    );
-    name = namePrefix + "ShaderResourceView";
-    output.shaderResourceView->SetPrivateData(WKPDID_D3DDebugObjectName,
-        (UINT)name.size(), name.c_str());
+    output.shaderResourceView = m_deviceResources->createShaderResourceView(
+        output.texture, namePrefix);
 
     // Create post-proccessing texture render target view
     DX::ThrowIfFailed(

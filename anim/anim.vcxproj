@@ -185,6 +185,7 @@
     <ClInclude Include="Common\Input\KeyboardEvent.h" />
     <ClInclude Include="Common\Input\Mouse.h" />
     <ClInclude Include="Common\Input\MouseEvent.h" />
+    <ClInclude Include="Common\stb_image.h" />
     <ClInclude Include="Common\StepTimer.h" />
     <ClInclude Include="Common\Camera\Camera.h" />
     <ClInclude Include="Content\Sample3DSceneRenderer.h" />

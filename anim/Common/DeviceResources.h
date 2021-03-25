@@ -49,6 +49,10 @@ namespace DX
         Microsoft::WRL::ComPtr<ID3D11VertexShader> createVertexShader(
             const std::string &namePrefix) const;
 
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> createShaderResourceView(
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture,
+            const std::string &namePrefix) const;
+
         // The size of the render target, in dips.
         Size GetLogicalSize() const { return m_logicalSize; }
 

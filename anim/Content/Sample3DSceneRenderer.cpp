@@ -5,6 +5,9 @@
 #include "..\Common\DirectXHelper.h"
 #include "..\Common\StepTimer.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "..\Common\stb_image.h"
+
 using namespace anim;
 
 using namespace DirectX;
@@ -439,19 +442,71 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     m_skySphereVertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName,
         (UINT)name.size(), name.c_str());
 
+    struct STBImage
+    {
+        int w;
+        int h;
+        int comp;
+        float *data = nullptr;
+
+        HRESULT load(const std::string &filename)
+        {
+            data = stbi_loadf(filename.c_str(), &w, &h, &comp, STBI_rgb_alpha);
+            if (data == nullptr)
+                return 1;
+            return 0;
+        }
+
+        ~STBImage()
+        {
+            stbi_image_free(data);
+        }
+    };
+
     // Load sky sphere texture
+    auto loadTexture = [this](const std::string &filename)
+    {
+        STBImage image;
+        DX::ThrowIfFailed(image.load(filename));
+
+        CD3D11_TEXTURE2D_DESC desc(
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            image.w,
+            image.h,
+            1, // Only one texture.
+            1, // Use a single mipmap level.
+            D3D11_BIND_SHADER_RESOURCE
+        );
+        D3D11_SUBRESOURCE_DATA initData;
+        initData.pSysMem = image.data;
+        initData.SysMemPitch = 4 * image.w * sizeof(float);
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        DX::ThrowIfFailed(
+            m_deviceResources->GetD3DDevice()->CreateTexture2D(
+                &desc,
+                &initData,
+                &texture
+            )
+        );
+
+        m_skySphereShaderResourceView = m_deviceResources->createShaderResourceView(
+            texture, filename);
+
+        //DX::ThrowIfFailed(
+        //    CreateWICTextureFromFile(
+        //        m_deviceResources->GetD3DDevice(),
+        //        m_deviceResources->GetD3DDeviceContext(),
+        //        filename,
+        //        &m_skySphereTexture,
+        //        &m_skySphereShaderResourceView
+        //    )
+        //);
+    };
+
     success = false;
     try
     {
-        DX::ThrowIfFailed(
-            CreateWICTextureFromFile(
-                m_deviceResources->GetD3DDevice(),
-                m_deviceResources->GetD3DDeviceContext(),
-                L"skysphere.jpg",
-                &m_skySphereTexture,
-                &m_skySphereShaderResourceView
-            )
-        );
+        loadTexture("skysphere.hdr");
         success = true;
     }
     catch (std::exception &)
@@ -459,15 +514,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     }
     if (!success)
     {
-        DX::ThrowIfFailed(
-            CreateWICTextureFromFile(
-                m_deviceResources->GetD3DDevice(),
-                m_deviceResources->GetD3DDeviceContext(),
-                L"..\\..\\skysphere.jpg",
-                &m_skySphereTexture,
-                &m_skySphereShaderResourceView
-            )
-        );
+        loadTexture("..\\..\\skysphere.hdr");
     }
 }
 

@@ -78,6 +78,9 @@
     <ClInclude Include="Content\WICTextureLoader.h">
       <Filter>Source Files\Common\WIC Texture Loader</Filter>
     </ClInclude>
+    <ClInclude Include="Common\stb_image.h">
+      <Filter>Source Files\Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common\DeviceResources.cpp">

@@ -5,5 +5,5 @@ SamplerState samplerState;
 
 float4 main(PixelShaderInput input) : SV_TARGET
 {
-    return shaderTexture.Sample(samplerState, input.texcoord) * 13;
+    return shaderTexture.Sample(samplerState, input.texcoord);
 }

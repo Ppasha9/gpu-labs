@@ -53,7 +53,6 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_materialConstantBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_generalConstantBuffer;
 
-        Microsoft::WRL::ComPtr<ID3D11Resource> m_skySphereTexture;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_skySphereShaderResourceView;
 
         ModelViewProjectionConstantBuffer    m_constantBufferData;
