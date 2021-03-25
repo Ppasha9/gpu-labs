@@ -1,4 +1,5 @@
 ﻿#include "pch.h"
+
 #include "Sample3DSceneRenderer.h"
 #include "WICTextureLoader.h"
 
@@ -12,6 +13,7 @@ using namespace anim;
 
 using namespace DirectX;
 using namespace Windows::Foundation;
+using namespace Microsoft::WRL;
 
 // Loads vertex and pixel shaders from files and instantiates the sphere geometry.
 Sample3DSceneRenderer::Sample3DSceneRenderer(
@@ -33,7 +35,6 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 {
     DX::Size outputSize = m_deviceResources->GetLogicalSize();
     float aspectRatio = outputSize.width / outputSize.height;
-    float fovAngleY = 70.0f * XM_PI / 180.0f;
 
     m_camera->SetProjectionValues(70.0f, aspectRatio, 0.01f, 1000.0f);
 
@@ -79,6 +80,8 @@ void Sample3DSceneRenderer::SetMaterial(MaterialConstantBuffer material)
 
 void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 {
+    renderCubemapTexture();
+
     if (m_keyboard->KeyWasReleased('1'))
         CycleLight(0);
     if (m_keyboard->KeyWasReleased('2'))
@@ -128,12 +131,16 @@ void Sample3DSceneRenderer::Render()
     // Send the constant buffer to the graphics device.
     context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
     context->PSSetConstantBuffers(0, 1, m_lightConstantBuffer.GetAddressOf());
+    context->PSSetConstantBuffers(2, 1, m_generalConstantBuffer.GetAddressOf());
 
     annotation->BeginEvent(L"RenderSkySphere");
     // Set sky sphere texture and shaders
-    context->VSSetShader(m_unlitVertexShader.Get(), nullptr, 0);
-    context->PSSetShader(m_unlitPixelShader.Get(), nullptr, 0);
-    context->PSSetShaderResources(0, 1, m_skySphereShaderResourceView.GetAddressOf());
+    //context->VSSetShader(m_unlitVertexShader.Get(), nullptr, 0);
+    //context->PSSetShader(m_unlitPixelShader.Get(), nullptr, 0);
+    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+    context->PSSetShader(m_skySpherePixelShader.Get(), nullptr, 0);
+    //context->PSSetShaderResources(0, 1, m_skySphereShaderResourceView.GetAddressOf());
+    context->PSSetShaderResources(0, 1, m_skyCubeMapShaderResourceView.GetAddressOf());
     context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
 
     // Set sky sphere geometry
@@ -184,7 +191,6 @@ void Sample3DSceneRenderer::Render()
         context->PSSetShader(m_fresnelPixelShader.Get(), nullptr, 0);
         break;
     }
-    context->PSSetConstantBuffers(2, 1, m_generalConstantBuffer.GetAddressOf());
 
     static const int sphereGridSize = 10;
     static const float gridWidth = 5;
@@ -252,10 +258,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
             &m_vertexShader
         )
     );
-
-    std::string shaderName = "SampleVertexShader";
-    m_vertexShader->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)shaderName.size(),
-        shaderName.c_str());
+    DX::SetName(m_vertexShader, "SampleVertexShader");
 
     static const D3D11_INPUT_ELEMENT_DESC vertexDesc[] =
     {
@@ -277,6 +280,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     m_unlitVertexShader = m_deviceResources->createVertexShader("Unlit");
 
     // Create pixel shader
+    m_skySpherePixelShader = m_deviceResources->createPixelShader("SkySphere");
     m_unlitPixelShader = m_deviceResources->createPixelShader("Unlit");
     m_pixelShader = m_deviceResources->createPixelShader("PBR");
     m_normDistrPixelShader = m_deviceResources->createPixelShader("NormalDistribution");
@@ -320,6 +324,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         )
     );
 
+    // Create sphere geometry
     static const int
         numLatitudeLines = 16,
         numLongitudeLines = 16;
@@ -328,8 +333,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     static const float longitudeSpacing = 1.0f / numLongitudeLines;
     static const float PI = 3.141592653589793238463f;
 
-    static std::vector<VertexPositionColorNormal> vertices;
-
+    std::vector<VertexPositionColorNormal> vertices;
     for (int latitude = 0; latitude <= numLatitudeLines; latitude++)
     {
         for (int longitude = 0; longitude <= numLongitudeLines; longitude++)
@@ -367,23 +371,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
             vertices.push_back(v);
         }
     }
-
-    D3D11_SUBRESOURCE_DATA vertexBufferData = { 0 };
-    vertexBufferData.pSysMem = vertices.data();
-    vertexBufferData.SysMemPitch = 0;
-    vertexBufferData.SysMemSlicePitch = 0;
-    CD3D11_BUFFER_DESC vertexBufferDesc((UINT)vertices.size() *
-        sizeof(VertexPositionColorNormal), D3D11_BIND_VERTEX_BUFFER);
-    DX::ThrowIfFailed(
-        device->CreateBuffer(
-            &vertexBufferDesc,
-            &vertexBufferData,
-            &m_vertexBuffer
-        )
-    );
-    std::string name = "SphereVertexBuffer";
-    m_vertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
-        name.c_str());
+    m_vertexBuffer = m_deviceResources->createVertexBuffer(vertices, "Sphere");
 
     // Create sky sphere vertex buffer
     for (auto &v : vertices)
@@ -396,19 +384,11 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         v.normal.y = -v.normal.y;
         v.normal.z = -v.normal.z;
     }
-    DX::ThrowIfFailed(
-        device->CreateBuffer(
-            &vertexBufferDesc,
-            &vertexBufferData,
-            &m_skySphereVertexBuffer
-        )
-    );
-    name = "SkySphereVertexBuffer";
-    m_skySphereVertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName,
-        (UINT)name.size(), name.c_str());
+    m_skySphereVertexBuffer =
+        m_deviceResources->createVertexBuffer(vertices, "SkySphere");
 
-    // create sphere index buffer
-    static std::vector<unsigned short> indices;
+    // Create sphere index buffer
+    std::vector<unsigned short> indices;
     for (int latitude = 0; latitude < numLatitudeLines; latitude++)
     {
         for (int longitude = 0; longitude < numLongitudeLines; longitude++)
@@ -424,24 +404,9 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     }
 
     m_indexCount = indices.size();
+    m_indexBuffer = m_deviceResources->createIndexBuffer(indices, "Sphere");
 
-    D3D11_SUBRESOURCE_DATA indexBufferData = { 0 };
-    indexBufferData.pSysMem = indices.data();
-    indexBufferData.SysMemPitch = 0;
-    indexBufferData.SysMemSlicePitch = 0;
-    CD3D11_BUFFER_DESC indexBufferDesc((UINT)indices.size() * sizeof(short),
-        D3D11_BIND_INDEX_BUFFER);
-    DX::ThrowIfFailed(
-        device->CreateBuffer(
-            &indexBufferDesc,
-            &indexBufferData,
-            &m_indexBuffer
-        )
-    );
-    name = "SphereIndexBuffer";
-    m_skySphereVertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName,
-        (UINT)name.size(), name.c_str());
-
+    // Load sky sphere texture
     struct STBImage
     {
         int w;
@@ -463,7 +428,6 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         }
     };
 
-    // Load sky sphere texture
     auto loadTexture = [this](const std::string &filename)
     {
         STBImage image;
@@ -480,27 +444,13 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         D3D11_SUBRESOURCE_DATA initData;
         initData.pSysMem = image.data;
         initData.SysMemPitch = 4 * image.w * sizeof(float);
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
-        DX::ThrowIfFailed(
-            m_deviceResources->GetD3DDevice()->CreateTexture2D(
-                &desc,
-                &initData,
-                &texture
-            )
-        );
 
-        m_skySphereShaderResourceView = m_deviceResources->createShaderResourceView(
-            texture, filename);
-
-        //DX::ThrowIfFailed(
-        //    CreateWICTextureFromFile(
-        //        m_deviceResources->GetD3DDevice(),
-        //        m_deviceResources->GetD3DDeviceContext(),
-        //        filename,
-        //        &m_skySphereTexture,
-        //        &m_skySphereShaderResourceView
-        //    )
-        //);
+        m_loadedSkyShaderResourceView = m_deviceResources->createShaderResourceView(
+            m_deviceResources->createTexture2D(
+                desc,
+                filename,
+                &initData),
+            filename);
     };
 
     success = false;
@@ -516,6 +466,8 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     {
         loadTexture("..\\..\\skysphere.hdr");
     }
+
+    renderCubemapTexture();
 }
 
 void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
@@ -532,4 +484,159 @@ void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
     m_generalConstantBuffer.Reset();
     m_vertexBuffer.Reset();
     m_indexBuffer.Reset();
+}
+
+void Sample3DSceneRenderer::renderCubemapTexture()
+{
+    static const UINT FACE_SIZE = 512;
+
+    auto device = m_deviceResources->GetD3DDevice();
+    auto context = m_deviceResources->GetD3DDeviceContext();
+    auto annotation = m_deviceResources->GetAnnotation();
+
+    annotation->BeginEvent(L"RenderCubeMap");
+
+    // Load pixel shader
+    ComPtr<ID3D11PixelShader> pixelShader = m_deviceResources->createPixelShader("CubeMap");
+
+    // Create cubemap texture
+    CD3D11_TEXTURE2D_DESC cubeMapDesc(
+        DXGI_FORMAT_R32G32B32A32_FLOAT,
+        FACE_SIZE,
+        FACE_SIZE,
+        6, // Six textures for faces.
+        1, // Use a single mipmap level.
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE
+    );
+    m_skyCubeMap = m_deviceResources->createTexture2D(cubeMapDesc, "SkyCubeMap");
+
+    // Create face-sized render target
+    DX::RenderTargetTexture rt =
+        m_deviceResources->createRenderTargetTexture(
+            { FACE_SIZE, FACE_SIZE }, "CubeMapRenderTexture"
+        );
+    D3D11_VIEWPORT viewport = CD3D11_VIEWPORT(0.0f, 0.0f, FACE_SIZE, FACE_SIZE);
+
+    // Create full-screen quad
+    static const std::vector<VertexPositionColorNormal> vertices(
+        {
+            { { -0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} },
+            { {  0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} },
+            { {  0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} },
+            { { -0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} }
+        }
+    );
+    static const std::vector<unsigned short> indices(
+        {
+            2, 0, 1,
+            2, 3, 0
+        }
+    );
+    ComPtr<ID3D11Buffer> vertexBuffer =
+        m_deviceResources->createVertexBuffer(vertices, "CubeMapFullScreenQuad");
+    ComPtr<ID3D11Buffer> indexBuffer =
+        m_deviceResources->createIndexBuffer(indices, "CubeMapFullScreenQuad");
+
+    // Quad rotation matrices
+    static const XMMATRIX rotations[6] =
+    {
+        XMMatrixTranspose(XMMatrixRotationY(-XM_PI / 2)), // +x
+        XMMatrixTranspose(XMMatrixRotationY( XM_PI / 2)), // -x
+        XMMatrixTranspose(XMMatrixRotationX( XM_PI / 2)), // +y
+        XMMatrixTranspose(XMMatrixRotationX(-XM_PI / 2)), // -y
+        XMMatrixTranspose(XMMatrixRotationY(XM_PI)),      // +z
+        XMMatrixIdentity()                                // -z
+    };
+
+    // Create camera
+    Camera cubeMapCamera;
+    cubeMapCamera.SetProjectionValues(90.0f, 1.0f, 0.01f, 1000.0f);
+    XMStoreFloat4x4(
+        &m_constantBufferData.projection,
+        XMMatrixTranspose(cubeMapCamera.GetProjectionMatrix())
+    );
+    cubeMapCamera.SetPosition(0.0f, 0.0f, 0.0f);
+
+    XMFLOAT3 lookAt[6] =
+    {
+        { 1.0f, 0.0f, 0.0f}, // +x
+        {-1.0f, 0.0f, 0.0f}, // -x
+        {0.0f,  1.0f, 0.0f}, // +y
+        {0.0f, -1.0f, 0.0f}, // -y
+        {0.0f, 0.0f,  1.0f}, // +z
+        {0.0f, 0.0f, -1.0f}  // -z
+    };
+
+    const XMVECTORF32 clrs[6] = {
+        DirectX::Colors::Red,
+        DirectX::Colors::DarkRed,
+        DirectX::Colors::Green,
+        DirectX::Colors::DarkGreen,
+        DirectX::Colors::Blue,
+        DirectX::Colors::DarkBlue
+    };
+
+    // Set rendering parameters
+    UINT stride = sizeof(VertexPositionColorNormal);
+    UINT offset = 0;
+    context->IASetVertexBuffers(0, 1, vertexBuffer.GetAddressOf(), &stride, &offset);
+    context->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    context->IASetInputLayout(m_inputLayout.Get());
+
+    context->OMSetRenderTargets(1, rt.renderTargetView.GetAddressOf(), nullptr);
+    context->RSSetViewports(1, &viewport);
+
+    context->PSSetShader(pixelShader.Get(), nullptr, 0);
+    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+
+    context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+
+    context->PSSetShaderResources(0, 1, m_loadedSkyShaderResourceView.GetAddressOf());
+
+    // Render each face
+    for (int i = 0; i < 6; i++)
+    {
+        // Set camera look at
+        cubeMapCamera.SetLookAtPos(lookAt[i]);
+        XMStoreFloat4x4(
+            &m_constantBufferData.view,
+            XMMatrixTranspose(cubeMapCamera.GetViewMatrix())
+        );
+
+        // Set full-screen quad rotation
+        XMStoreFloat4x4(&m_constantBufferData.model, rotations[i]);
+
+        // Send constant buffer data to GPU
+        context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL,
+            &m_constantBufferData, 0, 0);
+
+        // Render full-screen quad
+        ///context->ClearRenderTargetView(rt.renderTargetView.Get(), DirectX::Colors::Black);
+        context->ClearRenderTargetView(rt.renderTargetView.Get(), clrs[i]);
+        ///context->DrawIndexed((UINT)indices.size(), 0, 0);
+
+        // Copy render target contents to cube map
+        context->CopySubresourceRegion(
+            m_skyCubeMap.Get(), i,
+            0, 0, 0,
+            rt.texture.Get(), 0,
+            nullptr
+        );
+    }
+
+    // Restore main camera matrices
+    XMStoreFloat4x4(
+        &m_constantBufferData.view,
+        XMMatrixTranspose(m_camera->GetViewMatrix())
+    );
+    XMStoreFloat4x4(
+        &m_constantBufferData.projection,
+        XMMatrixTranspose(m_camera->GetProjectionMatrix())
+    );
+
+    m_skyCubeMapShaderResourceView =
+        m_deviceResources->createShaderResourceView(m_skyCubeMap, "SkySphere");
+
+    annotation->EndEvent(); // RenderCubeMap
 }

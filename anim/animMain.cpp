@@ -1,4 +1,5 @@
 ﻿#include "pch.h"
+
 #include "animMain.h"
 #include "Common\DirectXHelper.h"
 
@@ -9,8 +10,6 @@ using namespace DirectX;
 Microsoft::WRL::ComPtr<ID3D11Texture2D> AnimMain::createCPUAccessibleTexture(
     const DX::Size &size, const std::string &namePrefix)
 {
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> output;
-
     CD3D11_TEXTURE2D_DESC textureDesc(
         DXGI_FORMAT_R32G32B32A32_FLOAT,
         lround(size.width),
@@ -22,18 +21,7 @@ Microsoft::WRL::ComPtr<ID3D11Texture2D> AnimMain::createCPUAccessibleTexture(
         D3D11_CPU_ACCESS_READ
     );
 
-    DX::ThrowIfFailed(
-        m_deviceResources->GetD3DDevice()->CreateTexture2D(
-            &textureDesc,
-            nullptr,
-            &output
-        )
-    );
-    std::string name = namePrefix + "CPUAccTexture";
-    output->SetPrivateData(WKPDID_D3DDebugObjectName,
-        (UINT)name.size(), name.c_str());
-
-    return output;
+    return m_deviceResources->createTexture2D(textureDesc, namePrefix + "CPUAcc");
 }
 
 // Loads and initializes application assets when the application is loaded.
@@ -72,60 +60,6 @@ AnimMain::~AnimMain()
 {
 }
 
-AnimMain::RenderTargetTexture AnimMain::createRenderTargetTexture(
-    const DX::Size &size, const std::string &namePrefix) const
-{
-    RenderTargetTexture output;
-
-    output.viewport = CD3D11_VIEWPORT(
-        0.0f,
-        0.0f,
-        size.width,
-        size.height
-    );
-
-    auto device = m_deviceResources->GetD3DDevice();
-
-    // Create texture resource
-    output.textureDesc = CD3D11_TEXTURE2D_DESC(
-        DXGI_FORMAT_R32G32B32A32_FLOAT,
-        lround(size.width),
-        lround(size.height),
-        1, // Only one texture.
-        1, // Use a single mipmap level.
-        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE
-    );
-
-    DX::ThrowIfFailed(
-        device->CreateTexture2D(
-            &output.textureDesc,
-            nullptr,
-            &output.texture
-        )
-    );
-    std::string name = namePrefix + "Texture";
-    output.texture->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
-        name.c_str());
-
-    // Create post-proccessing texture shader resource view
-    output.shaderResourceView = m_deviceResources->createShaderResourceView(
-        output.texture, namePrefix);
-
-    // Create post-proccessing texture render target view
-    DX::ThrowIfFailed(
-        device->CreateRenderTargetView(
-            output.texture.Get(),
-            nullptr,
-            &output.renderTargetView
-        )
-    );
-    name = namePrefix + "RenderTargetView";
-    output.renderTargetView->SetPrivateData(WKPDID_D3DDebugObjectName,
-        (UINT)name.size(), name.c_str());
-
-    return output;
-}
-
 // Updates application state when the window size changes (e.g. device orientation change)
 void AnimMain::CreateWindowSizeDependentResources() 
 {
@@ -134,7 +68,7 @@ void AnimMain::CreateWindowSizeDependentResources()
     DX::Size size = m_deviceResources->GetLogicalSize();
 
     // Create scene render target
-    m_sceneRenderTarget = createRenderTargetTexture(size, "Scene");
+    m_sceneRenderTarget = m_deviceResources->createRenderTargetTexture(size, "Scene");
 
     // Create averaging render targets
     float minDim = min(size.width, size.height);
@@ -147,7 +81,8 @@ void AnimMain::CreateWindowSizeDependentResources()
     {
         float dim = (float)(1 << (n - i));
         DX::Size avgSize(dim, dim);
-        m_averagingRenderTargets.push_back(createRenderTargetTexture(avgSize,
+        m_averagingRenderTargets.push_back(
+            m_deviceResources->createRenderTargetTexture(avgSize,
             std::to_string(lround(avgSize.width)) + "x" + std::to_string(lround(avgSize.height))));
     }
 }
@@ -199,7 +134,6 @@ void AnimMain::InputUpdate(DX::StepTimer const& timer)
         m_keyboard->KeyWasReleased('5') ||
         m_keyboard->KeyWasReleased('6'))
         isHDR = false;
-
 }
 
 // Updates the application state once per frame.
@@ -217,7 +151,8 @@ void AnimMain::Update()
     m_keyboard->Update();
 }
 
-void AnimMain::copyTexture(const RenderTargetTexture &source, const RenderTargetTexture &dest) const
+void AnimMain::copyTexture(const DX::RenderTargetTexture &source,
+    const DX::RenderTargetTexture &dest) const
 {
     auto context = m_deviceResources->GetD3DDeviceContext();
 

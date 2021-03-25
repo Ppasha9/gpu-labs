@@ -31,6 +31,9 @@
     <Filter Include="Source Files\Common\WIC Texture Loader">
       <UniqueIdentifier>{616d050d-cb2c-47df-b1ff-103be6768d58}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Content\Sky sphere">
+      <UniqueIdentifier>{a04ce0a0-7387-4254-88e1-e0e762e2638f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common\DeviceResources.h">
@@ -162,6 +165,12 @@
     </FxCompile>
     <FxCompile Include="Content\UnlitInclude.cginc">
       <Filter>Source Files\Content\Unlit</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\CubeMapPixelShader.hlsl">
+      <Filter>Source Files\Content</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\SkySpherePixelShader.hlsl">
+      <Filter>Source Files\Content\Sky sphere</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

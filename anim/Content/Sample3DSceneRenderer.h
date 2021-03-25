@@ -38,11 +38,15 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_skySphereVertexBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_indexBuffer;
 
+        Microsoft::WRL::ComPtr<ID3D11Texture2D>    m_skyCubeMap;
+
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pixelShader;
 
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_unlitVertexShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_unlitPixelShader;
+
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_skySpherePixelShader;
 
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_normDistrPixelShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_geomPixelShader;
@@ -53,7 +57,8 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_materialConstantBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_generalConstantBuffer;
 
-        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_skySphereShaderResourceView;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_loadedSkyShaderResourceView;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_skyCubeMapShaderResourceView;
 
         ModelViewProjectionConstantBuffer    m_constantBufferData;
         MaterialConstantBuffer               m_materialConstantBufferData;
@@ -84,6 +89,8 @@ namespace anim
         void CycleLight(int lightId);
 
         void SetMaterial(MaterialConstantBuffer material);
+
+        void renderCubemapTexture();
     };
 }
 
