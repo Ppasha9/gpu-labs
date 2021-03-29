@@ -80,9 +80,6 @@ void Sample3DSceneRenderer::SetMaterial(MaterialConstantBuffer material)
 
 void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 {
-    if (timer.GetFrameCount() == 2)
-        renderCubemapTexture();
-
     if (m_keyboard->KeyWasReleased('1'))
         CycleLight(0);
     if (m_keyboard->KeyWasReleased('2'))
@@ -464,7 +461,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         loadTexture("..\\..\\skysphere.hdr");
     }
 
-    /// renderCubemapTexture();
+    renderCubemapTexture();
 }
 
 void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
@@ -503,7 +500,9 @@ void Sample3DSceneRenderer::renderCubemapTexture()
         FACE_SIZE,
         6, // Six textures for faces.
         1, // Use a single mipmap level.
-        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
+        D3D11_USAGE_DEFAULT, 0, 1, 0,
+        D3D11_RESOURCE_MISC_TEXTURECUBE
     );
     m_skyCubeMap = m_deviceResources->createTexture2D(cubeMapDesc, "SkyCubeMap");
 
@@ -541,8 +540,8 @@ void Sample3DSceneRenderer::renderCubemapTexture()
         XMMatrixTranspose(XMMatrixRotationY( XM_PI / 2)), // -x
         XMMatrixTranspose(XMMatrixRotationX( XM_PI / 2)), // +y
         XMMatrixTranspose(XMMatrixRotationX(-XM_PI / 2)), // -y
-        XMMatrixTranspose(XMMatrixRotationY(XM_PI)),      // +z
-        XMMatrixIdentity()                                // -z
+        XMMatrixIdentity(),                               // +z (in DirectX left-handed system)
+        XMMatrixTranspose(XMMatrixRotationY(XM_PI))       // -z (in DirectX left-handed system)
     };
 
     // Create camera
@@ -560,8 +559,8 @@ void Sample3DSceneRenderer::renderCubemapTexture()
         {-1.0f, 0.0f, 0.0f}, // -x
         {0.0f,  1.0f, 0.0f}, // +y
         {0.0f, -1.0f, 0.0f}, // -y
-        {0.0f, 0.0f,  1.0f}, // +z
-        {0.0f, 0.0f, -1.0f}  // -z
+        {0.0f, 0.0f, -1.0f}, // +z (in DirectX left-handed system)
+        {0.0f, 0.0f,  1.0f}  // -z (in DirectX left-handed system)
     };
 
     const XMVECTORF32 clrs[6] = {
@@ -585,6 +584,7 @@ void Sample3DSceneRenderer::renderCubemapTexture()
     context->RSSetViewports(1, &viewport);
 
     context->PSSetShader(pixelShader.Get(), nullptr, 0);
+    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 
     context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
@@ -632,8 +632,16 @@ void Sample3DSceneRenderer::renderCubemapTexture()
         XMMatrixTranspose(m_camera->GetProjectionMatrix())
     );
 
+    D3D11_SHADER_RESOURCE_VIEW_DESC desc =  CD3D11_SHADER_RESOURCE_VIEW_DESC(
+        m_skyCubeMap.Get(),
+        D3D11_SRV_DIMENSION_TEXTURECUBE,
+        cubeMapDesc.Format,
+        0,
+        1
+    );
+
     m_skyCubeMapShaderResourceView =
-        m_deviceResources->createShaderResourceView(m_skyCubeMap, "SkySphere");
+        m_deviceResources->createShaderResourceView(m_skyCubeMap, "SkySphere", &desc);
 
     annotation->EndEvent(); // RenderCubeMap
 }

@@ -16,8 +16,8 @@ float4 main(PixelShaderInput input) : SV_TARGET
     float3 n = normalize(input.worldPos);
 
     float2 texcoord;
-    texcoord.x = 1.0f - atan2(-n.z, n.x) / (2 * PI);
-    texcoord.y = 0.5f + asin(n.y) / PI;
+    texcoord.x = 1.0f - atan2(n.z, n.x) / (2 * PI);
+    texcoord.y = 0.5f - asin(n.y) / PI;
 
     return shaderTexture.Sample(samplerState, texcoord);
 }
