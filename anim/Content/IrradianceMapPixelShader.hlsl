@@ -10,8 +10,8 @@ struct PixelShaderInput
 };
 
 static const float PI = 3.14159265359f;
-#define N1 400
-#define N2 100
+#define N1 600
+#define N2 150
 
 float4 main(PixelShaderInput input) : SV_TARGET
 {

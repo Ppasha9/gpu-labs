@@ -76,6 +76,8 @@ namespace anim
             FRESNEL
         } m_shaderMode;
 
+        bool m_isDrawIrradiance = false;
+
         // Lights information
         LightConstantBuffer                  m_lightConstantBufferData;
 

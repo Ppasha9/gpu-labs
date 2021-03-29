@@ -95,6 +95,8 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
         m_shaderMode = PBRShaderMode::GEOMETRY;
     if (m_keyboard->KeyWasReleased('6'))
         m_shaderMode = PBRShaderMode::FRESNEL;
+    if (m_keyboard->KeyWasReleased('7'))
+        m_isDrawIrradiance = !m_isDrawIrradiance;
 
     // Update the view matrix, cause it can be changed by input
     XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
@@ -136,7 +138,10 @@ void Sample3DSceneRenderer::Render()
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
     context->PSSetShader(m_skySpherePixelShader.Get(), nullptr, 0);
 
-    context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
+    if (m_isDrawIrradiance)
+        context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
+    else
+        context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
     context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
 
     // Set sky sphere geometry
@@ -185,6 +190,8 @@ void Sample3DSceneRenderer::Render()
         context->PSSetShader(m_fresnelPixelShader.Get(), nullptr, 0);
         break;
     }
+    // Bind irradiance map
+    context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
 
     static const int sphereGridSize = 10;
     static const float gridWidth = 5;
@@ -203,7 +210,7 @@ void Sample3DSceneRenderer::Render()
 
             SetMaterial(
                 {
-                    XMFLOAT3(1, 0, 0),
+                    XMFLOAT3(1, 1, 1),
                     i / (sphereGridSize - 1.0f),
                     j / (sphereGridSize - 1.0f)
                 }
@@ -563,6 +570,15 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
         {0.0f, 0.0f,  1.0f}  // -z (in DirectX left-handed system)
     };
 
+    const XMVECTORF32 clrs[6] = {
+        DirectX::Colors::Red,
+        DirectX::Colors::Purple,
+        DirectX::Colors::Green,
+        DirectX::Colors::Yellow,
+        DirectX::Colors::Blue,
+        DirectX::Colors::Cyan
+    };
+
     // Set rendering parameters
     UINT stride = sizeof(VertexPositionColorNormal);
     UINT offset = 0;
@@ -600,7 +616,7 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
             &m_constantBufferData, 0, 0);
 
         // Render full-screen quad
-        context->ClearRenderTargetView(rt.renderTargetView.Get(), DirectX::Colors::Black);
+        context->ClearRenderTargetView(rt.renderTargetView.Get(), clrs[i]);
         context->DrawIndexed((UINT)indices.size(), 0, 0);
 
         // Copy render target contents to cube map
