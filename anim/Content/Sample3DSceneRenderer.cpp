@@ -136,7 +136,7 @@ void Sample3DSceneRenderer::Render()
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
     context->PSSetShader(m_skySpherePixelShader.Get(), nullptr, 0);
 
-    context->PSSetShaderResources(0, 1, m_skyCubeMapShaderResourceView.GetAddressOf());
+    context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
     context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
 
     // Set sky sphere geometry
@@ -439,7 +439,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         initData.pSysMem = image.data;
         initData.SysMemPitch = 4 * image.w * sizeof(float);
 
-        m_loadedSkyShaderResourceView = m_deviceResources->createShaderResourceView(
+        m_loadedSkyTextureSRV = m_deviceResources->createShaderResourceView(
             m_deviceResources->createTexture2D(
                 desc,
                 filename,
@@ -461,7 +461,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         loadTexture("..\\..\\skysphere.hdr");
     }
 
-    renderCubemapTexture();
+    renderSkyMapTexture();
 }
 
 void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
@@ -480,7 +480,7 @@ void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
     m_indexBuffer.Reset();
 }
 
-void Sample3DSceneRenderer::renderCubemapTexture()
+void Sample3DSceneRenderer::renderSkyMapTexture()
 {
     static const UINT FACE_SIZE = 512;
 
@@ -488,10 +488,10 @@ void Sample3DSceneRenderer::renderCubemapTexture()
     auto context = m_deviceResources->GetD3DDeviceContext();
     auto annotation = m_deviceResources->GetAnnotation();
 
-    annotation->BeginEvent(L"RenderCubeMap");
+    annotation->BeginEvent(L"RenderSkyMap");
 
     // Load pixel shader
-    ComPtr<ID3D11PixelShader> pixelShader = m_deviceResources->createPixelShader("CubeMap");
+    ComPtr<ID3D11PixelShader> pixelShader = m_deviceResources->createPixelShader("Equidistant2CubeMap");
 
     // Create cubemap texture
     CD3D11_TEXTURE2D_DESC cubeMapDesc(
@@ -516,10 +516,10 @@ void Sample3DSceneRenderer::renderCubemapTexture()
     // Create full-screen quad
     static const std::vector<VertexPositionColorNormal> vertices(
         {
-            { { -0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} },
-            { {  0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} },
-            { {  0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} },
-            { { -0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} }
+            { { -0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { {  0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { {  0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { { -0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} }
         }
     );
     static const std::vector<unsigned short> indices(
@@ -563,15 +563,6 @@ void Sample3DSceneRenderer::renderCubemapTexture()
         {0.0f, 0.0f,  1.0f}  // -z (in DirectX left-handed system)
     };
 
-    const XMVECTORF32 clrs[6] = {
-        DirectX::Colors::Red,
-        DirectX::Colors::DarkRed,
-        DirectX::Colors::Green,
-        DirectX::Colors::DarkGreen,
-        DirectX::Colors::Blue,
-        DirectX::Colors::DarkBlue
-    };
-
     // Set rendering parameters
     UINT stride = sizeof(VertexPositionColorNormal);
     UINT offset = 0;
@@ -589,10 +580,10 @@ void Sample3DSceneRenderer::renderCubemapTexture()
 
     context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
 
-    context->PSSetShaderResources(0, 1, m_loadedSkyShaderResourceView.GetAddressOf());
+    context->PSSetShaderResources(0, 1, m_loadedSkyTextureSRV.GetAddressOf());
 
     // Render each face
-    for (int i = 0; i < 6; i++)
+    auto renderFace = [&](int i, ComPtr<ID3D11Texture2D> targetCubeMapTexture)
     {
         // Set camera look at
         cubeMapCamera.SetLookAtPos(lookAt[i]);
@@ -609,18 +600,81 @@ void Sample3DSceneRenderer::renderCubemapTexture()
             &m_constantBufferData, 0, 0);
 
         // Render full-screen quad
-        ///context->ClearRenderTargetView(rt.renderTargetView.Get(), DirectX::Colors::Black);
-        context->ClearRenderTargetView(rt.renderTargetView.Get(), clrs[i]);
+        context->ClearRenderTargetView(rt.renderTargetView.Get(), DirectX::Colors::Black);
         context->DrawIndexed((UINT)indices.size(), 0, 0);
 
         // Copy render target contents to cube map
         context->CopySubresourceRegion(
-            m_skyCubeMap.Get(), i,
+            targetCubeMapTexture.Get(), i,
             0, 0, 0,
             rt.texture.Get(), 0,
             nullptr
         );
-    }
+    };
+
+    for (int i = 0; i < 6; i++)
+        renderFace(i, m_skyCubeMap);
+
+    // Create shader resource view
+    D3D11_SHADER_RESOURCE_VIEW_DESC desc =  CD3D11_SHADER_RESOURCE_VIEW_DESC(
+        m_skyCubeMap.Get(),
+        D3D11_SRV_DIMENSION_TEXTURECUBE,
+        cubeMapDesc.Format,
+        0,
+        1
+    );
+
+    m_skyMapSRV = m_deviceResources->createShaderResourceView(
+        m_skyCubeMap,
+        "SkyMap",
+        &desc
+    );
+
+    annotation->EndEvent(); // RenderSkyMap
+
+    annotation->BeginEvent(L"RenderIrradianceMap");
+    static const UINT IRR_FACE_SIZE = 32;
+
+    // Load irradiance pixel shader
+    pixelShader = m_deviceResources->createPixelShader("IrradianceMap");
+
+    // Create irradiance cubemap texture
+    CD3D11_TEXTURE2D_DESC irrCubeMapDesc(
+        DXGI_FORMAT_R32G32B32A32_FLOAT,
+        IRR_FACE_SIZE,
+        IRR_FACE_SIZE,
+        6, // Six textures for faces.
+        1, // Use a single mipmap level.
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
+        D3D11_USAGE_DEFAULT, 0, 1, 0,
+        D3D11_RESOURCE_MISC_TEXTURECUBE
+    );
+    m_irradianceCubeMap = m_deviceResources->createTexture2D(irrCubeMapDesc, "IrradianceCubeMap");
+
+    // Create face-sized render target
+    rt =  m_deviceResources->createRenderTargetTexture(
+        { IRR_FACE_SIZE, IRR_FACE_SIZE }, "IrradianceMapRenderTexture"
+    );
+    viewport = CD3D11_VIEWPORT(0.0f, 0.0f, IRR_FACE_SIZE, IRR_FACE_SIZE);
+
+    // Set rendering parameters
+    context->OMSetRenderTargets(1, rt.renderTargetView.GetAddressOf(), nullptr);
+    context->RSSetViewports(1, &viewport);
+    context->PSSetShader(pixelShader.Get(), nullptr, 0);
+    context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
+
+    // Render each face
+    for (int i = 0; i < 6; i++)
+        renderFace(i, m_irradianceCubeMap);
+
+    // Create shader resource view
+    m_irradianceMapSRV = m_deviceResources->createShaderResourceView(
+        m_irradianceCubeMap,
+        "IrradianceMap",
+        &desc
+    );
+
+    annotation->EndEvent(); // RenderIrradianceMap
 
     // Restore main camera matrices
     XMStoreFloat4x4(
@@ -631,17 +685,4 @@ void Sample3DSceneRenderer::renderCubemapTexture()
         &m_constantBufferData.projection,
         XMMatrixTranspose(m_camera->GetProjectionMatrix())
     );
-
-    D3D11_SHADER_RESOURCE_VIEW_DESC desc =  CD3D11_SHADER_RESOURCE_VIEW_DESC(
-        m_skyCubeMap.Get(),
-        D3D11_SRV_DIMENSION_TEXTURECUBE,
-        cubeMapDesc.Format,
-        0,
-        1
-    );
-
-    m_skyCubeMapShaderResourceView =
-        m_deviceResources->createShaderResourceView(m_skyCubeMap, "SkySphere", &desc);
-
-    annotation->EndEvent(); // RenderCubeMap
 }

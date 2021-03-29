@@ -166,11 +166,14 @@
     <FxCompile Include="Content\UnlitInclude.cginc">
       <Filter>Source Files\Content\Unlit</Filter>
     </FxCompile>
-    <FxCompile Include="Content\CubeMapPixelShader.hlsl">
-      <Filter>Source Files\Content</Filter>
-    </FxCompile>
     <FxCompile Include="Content\SkySpherePixelShader.hlsl">
       <Filter>Source Files\Content\Sky sphere</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Equidistant2CubeMapPixelShader.hlsl">
+      <Filter>Source Files\Content</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\IrradianceMapPixelShader.hlsl">
+      <Filter>Source Files\Content</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
