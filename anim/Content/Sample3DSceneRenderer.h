@@ -38,11 +38,16 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_skySphereVertexBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_indexBuffer;
 
+        Microsoft::WRL::ComPtr<ID3D11Texture2D>    m_skyCubeMap;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D>    m_irradianceCubeMap;
+
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pixelShader;
 
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_unlitVertexShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_unlitPixelShader;
+
+        Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_skySpherePixelShader;
 
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_normDistrPixelShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_geomPixelShader;
@@ -53,8 +58,9 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_materialConstantBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_generalConstantBuffer;
 
-        Microsoft::WRL::ComPtr<ID3D11Resource> m_skySphereTexture;
-        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_skySphereShaderResourceView;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_loadedSkyTextureSRV;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_skyMapSRV;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_irradianceMapSRV;
 
         ModelViewProjectionConstantBuffer    m_constantBufferData;
         MaterialConstantBuffer               m_materialConstantBufferData;
@@ -70,9 +76,10 @@ namespace anim
             FRESNEL
         } m_shaderMode;
 
+        bool m_isDrawIrradiance = false;
+
         // Lights information
         LightConstantBuffer                  m_lightConstantBufferData;
-
 
         // Constant colors
         const DirectX::XMFLOAT3 LIGHT_COLOR_1 = DirectX::XMFLOAT3(1.0f, 1.0f, 0.8f);
@@ -85,6 +92,8 @@ namespace anim
         void CycleLight(int lightId);
 
         void SetMaterial(MaterialConstantBuffer material);
+
+        void renderSkyMapTexture();
     };
 }
 

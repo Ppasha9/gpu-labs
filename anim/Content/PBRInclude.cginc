@@ -1,3 +1,6 @@
+TextureCube irradianceMap;
+SamplerState samplerState;
+
 static const float PI = 3.14159265359f;
 
 static const float3 lightPos[3] =
@@ -72,6 +75,24 @@ float3 fresnel(float3 n, float3 wi, float3 wo)
 {
     float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metalness);
     return (F0 + (1 - F0) * pow(1 - myDot(h(wi, wo), wo), 5)) * sign(myDot(wi, n));
+}
+
+float3 fresnelEnvironment(float3 n, float3 wo)
+{
+    float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metalness);
+    return (F0 + (max(1 - roughness, F0) - F0) * pow(1 - myDot(n, wo), 5));
+}
+
+float3 ambient(float3 n, float3 wo)
+{
+    float3 F = fresnelEnvironment(n, wo);
+    float3 kS = F; // reflected
+    float3 kD = float3(1.0f, 1.0f, 1.0f) - kS; // diffused
+    kD *= 1.0f - metalness;
+    float3 irradiance = irradianceMap.Sample(samplerState, n).rgb;
+    float3 diffuse = irradiance * albedo;
+
+    return kD * diffuse;
 }
 
 float3 cookTorranceBRDF(float3 p, float3 n, float3 wi, float3 wo)

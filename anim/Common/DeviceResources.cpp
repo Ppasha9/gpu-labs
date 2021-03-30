@@ -1,6 +1,6 @@
 ﻿#include "pch.h"
+
 #include "DeviceResources.h"
-#include "DirectXHelper.h"
 #include "roapi.h"
 
 using namespace D2D1;
@@ -149,6 +149,26 @@ void DX::DeviceResources::CreateDeviceResources()
             &m_d2dContext
             )
         );
+
+    // Create sampler state
+    D3D11_SAMPLER_DESC samplerDesc;
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.MipLODBias = 0.0f;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+    samplerDesc.BorderColor[0] = 0;
+    samplerDesc.BorderColor[1] = 0;
+    samplerDesc.BorderColor[2] = 0;
+    samplerDesc.BorderColor[3] = 0;
+    samplerDesc.MinLOD = 0;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateSamplerState(&samplerDesc, &m_samplerState)
+    );
 }
 
 // These resources need to be recreated every time the window size is changed.
@@ -226,16 +246,7 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
         m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer))
         );
 
-    DX::ThrowIfFailed(
-        m_d3dDevice->CreateRenderTargetView(
-            backBuffer.Get(),
-            nullptr,
-            &m_d3dRenderTargetView
-            )
-        );
-    std::string name = "BackBufferRenderTargetView";
-    m_d3dRenderTargetView->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
-        name.c_str());
+    m_d3dRenderTargetView = createRenderTargetView(backBuffer, "BackBuffer");
 
     // Create a depth stencil view for use with 3D rendering if needed.
     CD3D11_TEXTURE2D_DESC depthStencilDesc(
@@ -247,14 +258,7 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
         D3D11_BIND_DEPTH_STENCIL
         );
 
-    ComPtr<ID3D11Texture2D> depthStencil;
-    DX::ThrowIfFailed(
-        m_d3dDevice->CreateTexture2D(
-            &depthStencilDesc,
-            nullptr,
-            &depthStencil
-            )
-        );
+    ComPtr<ID3D11Texture2D> depthStencil = createTexture2D(depthStencilDesc, "DepthStencil");
 
     CD3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc(D3D11_DSV_DIMENSION_TEXTURE2D);
     DX::ThrowIfFailed(
@@ -264,26 +268,6 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d3dDepthStencilView
             )
         );
-
-    // Create sampler state
-    D3D11_SAMPLER_DESC samplerDesc;
-    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-    samplerDesc.MipLODBias = 0.0f;
-    samplerDesc.MaxAnisotropy = 1;
-    samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
-    samplerDesc.BorderColor[0] = 0;
-    samplerDesc.BorderColor[1] = 0;
-    samplerDesc.BorderColor[2] = 0;
-    samplerDesc.BorderColor[3] = 0;
-    samplerDesc.MinLOD = 0;
-    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-
-    DX::ThrowIfFailed(
-        m_d3dDevice->CreateSamplerState(&samplerDesc, &m_samplerState)
-    );
 
     // Set the 3D rendering viewport to target the entire window.
     m_screenViewport = CD3D11_VIEWPORT(
@@ -356,7 +340,7 @@ void DX::DeviceResources::Present()
     DX::ThrowIfFailed(hr);
 }
 
-Microsoft::WRL::ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader(
+ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader(
     const std::string &namePrefix) const
 {
     ComPtr<ID3D11PixelShader> output;
@@ -386,14 +370,12 @@ Microsoft::WRL::ComPtr<ID3D11PixelShader> DX::DeviceResources::createPixelShader
             &output
         )
     );
-    std::string shaderName = namePrefix + "PixelShader";
-    output->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)shaderName.size(),
-        shaderName.c_str());
+    DX::SetName(output, namePrefix + "PixelShader");
 
     return output;
 }
 
-Microsoft::WRL::ComPtr<ID3D11VertexShader> DX::DeviceResources::createVertexShader(
+ComPtr<ID3D11VertexShader> DX::DeviceResources::createVertexShader(
     const std::string &namePrefix) const
 {
     ComPtr<ID3D11VertexShader> output;
@@ -423,9 +405,102 @@ Microsoft::WRL::ComPtr<ID3D11VertexShader> DX::DeviceResources::createVertexShad
             &output
         )
     );
-    std::string shaderName = namePrefix + "VertexShader";
-    output->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)shaderName.size(),
-        shaderName.c_str());
+    DX::SetName(output, namePrefix + "VertexShader");
+
+    return output;
+}
+
+ComPtr<ID3D11ShaderResourceView> DX::DeviceResources::createShaderResourceView(
+    ComPtr<ID3D11Texture2D> texture, const std::string &namePrefix,
+    const D3D11_SHADER_RESOURCE_VIEW_DESC *desc) const
+{
+    ComPtr<ID3D11ShaderResourceView> shaderResource;
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateShaderResourceView(
+            texture.Get(),
+            desc,
+            &shaderResource
+        )
+    );
+    DX::SetName(shaderResource, namePrefix + "ShaderResourceView");
+
+    return shaderResource;
+}
+
+ComPtr<ID3D11RenderTargetView> DX::DeviceResources::createRenderTargetView(
+    ComPtr<ID3D11Texture2D> texture, const std::string &namePrefix) const
+{
+    ComPtr<ID3D11RenderTargetView> renderTarget;
+
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateRenderTargetView(texture.Get(), nullptr, &renderTarget)
+    );
+    DX::SetName(renderTarget, namePrefix + "RenderTargetView");
+
+    return renderTarget;
+}
+
+ComPtr<ID3D11Texture2D> DX::DeviceResources::createTexture2D(
+    const D3D11_TEXTURE2D_DESC &desc, const std::string &namePrefix,
+    const D3D11_SUBRESOURCE_DATA *initData) const
+{
+    ComPtr<ID3D11Texture2D> texture;
+
+    DX::ThrowIfFailed(m_d3dDevice->CreateTexture2D(&desc, initData, &texture));
+    DX::SetName(texture, namePrefix + "Texture");
+
+    return texture;
+}
+
+Microsoft::WRL::ComPtr<ID3D11Buffer> DX::DeviceResources::createIndexBuffer(
+    const std::vector<unsigned short> &indices,
+    const std::string &namePrefix) const
+{
+    Microsoft::WRL::ComPtr<ID3D11Buffer> indexBuffer;
+
+    CD3D11_BUFFER_DESC indexBufferDesc(
+        (UINT)indices.size() * sizeof(UINT),
+        D3D11_BIND_INDEX_BUFFER
+    );
+
+    D3D11_SUBRESOURCE_DATA indexBufferData = { 0 };
+    indexBufferData.pSysMem = indices.data();
+
+    ThrowIfFailed(
+        m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &indexBuffer)
+    );
+    SetName(indexBuffer, namePrefix + "IndexBuffer");
+
+    return indexBuffer;
+}
+
+DX::RenderTargetTexture DX::DeviceResources::createRenderTargetTexture(
+    const DX::Size &size, const std::string &namePrefix) const
+{
+    RenderTargetTexture output;
+
+    output.viewport = CD3D11_VIEWPORT(
+        0.0f,
+        0.0f,
+        size.width,
+        size.height
+    );
+
+    output.textureDesc = CD3D11_TEXTURE2D_DESC(
+        DXGI_FORMAT_R32G32B32A32_FLOAT,
+        lround(size.width),
+        lround(size.height),
+        1, // Only one texture.
+        1, // Use a single mipmap level.
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE
+    );
+
+    output.texture = createTexture2D(output.textureDesc, namePrefix);
+    output.shaderResourceView = createShaderResourceView(
+        output.texture, namePrefix);
+    output.renderTargetView = createRenderTargetView(
+        output.texture, namePrefix);
 
     return output;
 }

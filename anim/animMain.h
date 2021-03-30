@@ -44,15 +44,6 @@ namespace anim
         void OnMouseMoveRaw(int x, int y);
 
     private:
-        struct RenderTargetTexture
-        {
-            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
-            Microsoft::WRL::ComPtr<ID3D11RenderTargetView> renderTargetView;
-            Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shaderResourceView;
-            D3D11_VIEWPORT viewport;
-            CD3D11_TEXTURE2D_DESC textureDesc;
-        };
-
         // Cached pointer to device resources.
         std::shared_ptr<DX::DeviceResources> m_deviceResources;
 
@@ -77,10 +68,10 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_hdrPixelShader;
 
         // Scene render target
-        RenderTargetTexture m_sceneRenderTarget;
+        DX::RenderTargetTexture m_sceneRenderTarget;
 
         // Render targets of decreasing sizes used to calculate frame average brightness
-        std::vector<RenderTargetTexture> m_averagingRenderTargets;
+        std::vector<DX::RenderTargetTexture> m_averagingRenderTargets;
 
         Microsoft::WRL::ComPtr<ID3D11Texture2D> m_averageBrightnessCPUAccTexture;
 
@@ -99,15 +90,11 @@ namespace anim
 
         D3D11_MAPPED_SUBRESOURCE m_averageBrightnessAccessor;
 
-        // Create texture of given size and bind it as render target and shader resource
-        RenderTargetTexture createRenderTargetTexture(const DX::Size &size,
-            const std::string &namePrefix) const;
-
         Microsoft::WRL::ComPtr<ID3D11Texture2D> createCPUAccessibleTexture(
             const DX::Size &size, const std::string &namePrefix);
 
-        void copyTexture(const RenderTargetTexture &source,
-            const RenderTargetTexture &dest) const;
+        void copyTexture(const DX::RenderTargetTexture &source,
+            const DX::RenderTargetTexture &dest) const;
 
         void InputUpdate(DX::StepTimer const& timer);
 

@@ -27,6 +27,13 @@ namespace DX
         return {};
     }
 
+    inline void SetName(Microsoft::WRL::ComPtr<ID3D11DeviceChild> resource,
+        const std::string &name)
+    {
+        resource->SetPrivateData(WKPDID_D3DDebugObjectName,
+            (UINT)name.size(), name.c_str());
+    }
+
 #if defined(_DEBUG)
     // Check for SDK Layer support.
     inline bool SdkLayersAvailable()

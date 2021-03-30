@@ -1,14 +1,19 @@
 ﻿#include "pch.h"
+
 #include "Sample3DSceneRenderer.h"
 #include "WICTextureLoader.h"
 
 #include "..\Common\DirectXHelper.h"
 #include "..\Common\StepTimer.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "..\Common\stb_image.h"
+
 using namespace anim;
 
 using namespace DirectX;
 using namespace Windows::Foundation;
+using namespace Microsoft::WRL;
 
 // Loads vertex and pixel shaders from files and instantiates the sphere geometry.
 Sample3DSceneRenderer::Sample3DSceneRenderer(
@@ -30,7 +35,6 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 {
     DX::Size outputSize = m_deviceResources->GetLogicalSize();
     float aspectRatio = outputSize.width / outputSize.height;
-    float fovAngleY = 70.0f * XM_PI / 180.0f;
 
     m_camera->SetProjectionValues(70.0f, aspectRatio, 0.01f, 1000.0f);
 
@@ -91,6 +95,8 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
         m_shaderMode = PBRShaderMode::GEOMETRY;
     if (m_keyboard->KeyWasReleased('6'))
         m_shaderMode = PBRShaderMode::FRESNEL;
+    if (m_keyboard->KeyWasReleased('7'))
+        m_isDrawIrradiance = !m_isDrawIrradiance;
 
     // Update the view matrix, cause it can be changed by input
     XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
@@ -125,12 +131,17 @@ void Sample3DSceneRenderer::Render()
     // Send the constant buffer to the graphics device.
     context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
     context->PSSetConstantBuffers(0, 1, m_lightConstantBuffer.GetAddressOf());
+    context->PSSetConstantBuffers(2, 1, m_generalConstantBuffer.GetAddressOf());
 
     annotation->BeginEvent(L"RenderSkySphere");
     // Set sky sphere texture and shaders
-    context->VSSetShader(m_unlitVertexShader.Get(), nullptr, 0);
-    context->PSSetShader(m_unlitPixelShader.Get(), nullptr, 0);
-    context->PSSetShaderResources(0, 1, m_skySphereShaderResourceView.GetAddressOf());
+    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+    context->PSSetShader(m_skySpherePixelShader.Get(), nullptr, 0);
+
+    if (m_isDrawIrradiance)
+        context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
+    else
+        context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
     context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
 
     // Set sky sphere geometry
@@ -138,9 +149,7 @@ void Sample3DSceneRenderer::Render()
     // Set scale matrix
     XMStoreFloat4x4(
         &m_constantBufferData.model,
-        //XMMatrixIdentity()
         XMMatrixMultiplyTranspose(
-            //XMMatrixIdentity(),
             XMMatrixScaling(
                 999,
                 999,
@@ -181,7 +190,8 @@ void Sample3DSceneRenderer::Render()
         context->PSSetShader(m_fresnelPixelShader.Get(), nullptr, 0);
         break;
     }
-    context->PSSetConstantBuffers(2, 1, m_generalConstantBuffer.GetAddressOf());
+    // Bind irradiance map
+    context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
 
     static const int sphereGridSize = 10;
     static const float gridWidth = 5;
@@ -200,7 +210,7 @@ void Sample3DSceneRenderer::Render()
 
             SetMaterial(
                 {
-                    XMFLOAT3(1, 0, 0),
+                    XMFLOAT3(1, 1, 1),
                     i / (sphereGridSize - 1.0f),
                     j / (sphereGridSize - 1.0f)
                 }
@@ -249,10 +259,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
             &m_vertexShader
         )
     );
-
-    std::string shaderName = "SampleVertexShader";
-    m_vertexShader->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)shaderName.size(),
-        shaderName.c_str());
+    DX::SetName(m_vertexShader, "SampleVertexShader");
 
     static const D3D11_INPUT_ELEMENT_DESC vertexDesc[] =
     {
@@ -274,6 +281,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     m_unlitVertexShader = m_deviceResources->createVertexShader("Unlit");
 
     // Create pixel shader
+    m_skySpherePixelShader = m_deviceResources->createPixelShader("SkySphere");
     m_unlitPixelShader = m_deviceResources->createPixelShader("Unlit");
     m_pixelShader = m_deviceResources->createPixelShader("PBR");
     m_normDistrPixelShader = m_deviceResources->createPixelShader("NormalDistribution");
@@ -317,6 +325,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         )
     );
 
+    // Create sphere geometry
     static const int
         numLatitudeLines = 16,
         numLongitudeLines = 16;
@@ -325,8 +334,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     static const float longitudeSpacing = 1.0f / numLongitudeLines;
     static const float PI = 3.141592653589793238463f;
 
-    static std::vector<VertexPositionColorNormal> vertices;
-
+    std::vector<VertexPositionColorNormal> vertices;
     for (int latitude = 0; latitude <= numLatitudeLines; latitude++)
     {
         for (int longitude = 0; longitude <= numLongitudeLines; longitude++)
@@ -364,23 +372,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
             vertices.push_back(v);
         }
     }
-
-    D3D11_SUBRESOURCE_DATA vertexBufferData = { 0 };
-    vertexBufferData.pSysMem = vertices.data();
-    vertexBufferData.SysMemPitch = 0;
-    vertexBufferData.SysMemSlicePitch = 0;
-    CD3D11_BUFFER_DESC vertexBufferDesc((UINT)vertices.size() *
-        sizeof(VertexPositionColorNormal), D3D11_BIND_VERTEX_BUFFER);
-    DX::ThrowIfFailed(
-        device->CreateBuffer(
-            &vertexBufferDesc,
-            &vertexBufferData,
-            &m_vertexBuffer
-        )
-    );
-    std::string name = "SphereVertexBuffer";
-    m_vertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)name.size(),
-        name.c_str());
+    m_vertexBuffer = m_deviceResources->createVertexBuffer(vertices, "Sphere");
 
     // Create sky sphere vertex buffer
     for (auto &v : vertices)
@@ -393,19 +385,11 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
         v.normal.y = -v.normal.y;
         v.normal.z = -v.normal.z;
     }
-    DX::ThrowIfFailed(
-        device->CreateBuffer(
-            &vertexBufferDesc,
-            &vertexBufferData,
-            &m_skySphereVertexBuffer
-        )
-    );
-    name = "SkySphereVertexBuffer";
-    m_skySphereVertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName,
-        (UINT)name.size(), name.c_str());
+    m_skySphereVertexBuffer =
+        m_deviceResources->createVertexBuffer(vertices, "SkySphere");
 
-    // create sphere index buffer
-    static std::vector<unsigned short> indices;
+    // Create sphere index buffer
+    std::vector<unsigned short> indices;
     for (int latitude = 0; latitude < numLatitudeLines; latitude++)
     {
         for (int longitude = 0; longitude < numLongitudeLines; longitude++)
@@ -421,37 +405,59 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     }
 
     m_indexCount = indices.size();
-
-    D3D11_SUBRESOURCE_DATA indexBufferData = { 0 };
-    indexBufferData.pSysMem = indices.data();
-    indexBufferData.SysMemPitch = 0;
-    indexBufferData.SysMemSlicePitch = 0;
-    CD3D11_BUFFER_DESC indexBufferDesc((UINT)indices.size() * sizeof(short),
-        D3D11_BIND_INDEX_BUFFER);
-    DX::ThrowIfFailed(
-        device->CreateBuffer(
-            &indexBufferDesc,
-            &indexBufferData,
-            &m_indexBuffer
-        )
-    );
-    name = "SphereIndexBuffer";
-    m_skySphereVertexBuffer->SetPrivateData(WKPDID_D3DDebugObjectName,
-        (UINT)name.size(), name.c_str());
+    m_indexBuffer = m_deviceResources->createIndexBuffer(indices, "Sphere");
 
     // Load sky sphere texture
+    struct STBImage
+    {
+        int w;
+        int h;
+        int comp;
+        float *data = nullptr;
+
+        HRESULT load(const std::string &filename)
+        {
+            data = stbi_loadf(filename.c_str(), &w, &h, &comp, STBI_rgb_alpha);
+            if (data == nullptr)
+                return 1;
+            return 0;
+        }
+
+        ~STBImage()
+        {
+            stbi_image_free(data);
+        }
+    };
+
+    auto loadTexture = [this](const std::string &filename)
+    {
+        STBImage image;
+        DX::ThrowIfFailed(image.load(filename));
+
+        CD3D11_TEXTURE2D_DESC desc(
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            image.w,
+            image.h,
+            1, // Only one texture.
+            1, // Use a single mipmap level.
+            D3D11_BIND_SHADER_RESOURCE
+        );
+        D3D11_SUBRESOURCE_DATA initData;
+        initData.pSysMem = image.data;
+        initData.SysMemPitch = 4 * image.w * sizeof(float);
+
+        m_loadedSkyTextureSRV = m_deviceResources->createShaderResourceView(
+            m_deviceResources->createTexture2D(
+                desc,
+                filename,
+                &initData),
+            filename);
+    };
+
     success = false;
     try
     {
-        DX::ThrowIfFailed(
-            CreateWICTextureFromFile(
-                m_deviceResources->GetD3DDevice(),
-                m_deviceResources->GetD3DDeviceContext(),
-                L"skysphere.jpg",
-                &m_skySphereTexture,
-                &m_skySphereShaderResourceView
-            )
-        );
+        loadTexture("skysphere.hdr");
         success = true;
     }
     catch (std::exception &)
@@ -459,16 +465,10 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     }
     if (!success)
     {
-        DX::ThrowIfFailed(
-            CreateWICTextureFromFile(
-                m_deviceResources->GetD3DDevice(),
-                m_deviceResources->GetD3DDeviceContext(),
-                L"..\\..\\skysphere.jpg",
-                &m_skySphereTexture,
-                &m_skySphereShaderResourceView
-            )
-        );
+        loadTexture("..\\..\\skysphere.hdr");
     }
+
+    renderSkyMapTexture();
 }
 
 void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
@@ -485,4 +485,220 @@ void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
     m_generalConstantBuffer.Reset();
     m_vertexBuffer.Reset();
     m_indexBuffer.Reset();
+}
+
+void Sample3DSceneRenderer::renderSkyMapTexture()
+{
+    static const UINT FACE_SIZE = 512;
+
+    auto device = m_deviceResources->GetD3DDevice();
+    auto context = m_deviceResources->GetD3DDeviceContext();
+    auto annotation = m_deviceResources->GetAnnotation();
+
+    annotation->BeginEvent(L"RenderSkyMap");
+
+    // Load pixel shader
+    ComPtr<ID3D11PixelShader> pixelShader = m_deviceResources->createPixelShader("Equidistant2CubeMap");
+
+    // Create cubemap texture
+    CD3D11_TEXTURE2D_DESC cubeMapDesc(
+        DXGI_FORMAT_R32G32B32A32_FLOAT,
+        FACE_SIZE,
+        FACE_SIZE,
+        6, // Six textures for faces.
+        1, // Use a single mipmap level.
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
+        D3D11_USAGE_DEFAULT, 0, 1, 0,
+        D3D11_RESOURCE_MISC_TEXTURECUBE
+    );
+    m_skyCubeMap = m_deviceResources->createTexture2D(cubeMapDesc, "SkyCubeMap");
+
+    // Create face-sized render target
+    DX::RenderTargetTexture rt =
+        m_deviceResources->createRenderTargetTexture(
+            { FACE_SIZE, FACE_SIZE }, "CubeMapRenderTexture"
+        );
+    D3D11_VIEWPORT viewport = CD3D11_VIEWPORT(0.0f, 0.0f, FACE_SIZE, FACE_SIZE);
+
+    // Create full-screen quad
+    static const std::vector<VertexPositionColorNormal> vertices(
+        {
+            { { -0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { {  0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { {  0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { { -0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} }
+        }
+    );
+    static const std::vector<unsigned short> indices(
+        {
+            2, 0, 1,
+            2, 3, 0
+        }
+    );
+    ComPtr<ID3D11Buffer> vertexBuffer =
+        m_deviceResources->createVertexBuffer(vertices, "CubeMapFullScreenQuad");
+    ComPtr<ID3D11Buffer> indexBuffer =
+        m_deviceResources->createIndexBuffer(indices, "CubeMapFullScreenQuad");
+
+    // Quad rotation matrices
+    static const XMMATRIX rotations[6] =
+    {
+        XMMatrixTranspose(XMMatrixRotationY(-XM_PI / 2)), // +x
+        XMMatrixTranspose(XMMatrixRotationY( XM_PI / 2)), // -x
+        XMMatrixTranspose(XMMatrixRotationX( XM_PI / 2)), // +y
+        XMMatrixTranspose(XMMatrixRotationX(-XM_PI / 2)), // -y
+        XMMatrixIdentity(),                               // +z (in DirectX left-handed system)
+        XMMatrixTranspose(XMMatrixRotationY(XM_PI))       // -z (in DirectX left-handed system)
+    };
+
+    // Create camera
+    Camera cubeMapCamera;
+    cubeMapCamera.SetProjectionValues(90.0f, 1.0f, 0.01f, 1000.0f);
+    XMStoreFloat4x4(
+        &m_constantBufferData.projection,
+        XMMatrixTranspose(cubeMapCamera.GetProjectionMatrix())
+    );
+    cubeMapCamera.SetPosition(0.0f, 0.0f, 0.0f);
+
+    XMFLOAT3 lookAt[6] =
+    {
+        { 1.0f, 0.0f, 0.0f}, // +x
+        {-1.0f, 0.0f, 0.0f}, // -x
+        {0.0f,  1.0f, 0.0f}, // +y
+        {0.0f, -1.0f, 0.0f}, // -y
+        {0.0f, 0.0f, -1.0f}, // +z (in DirectX left-handed system)
+        {0.0f, 0.0f,  1.0f}  // -z (in DirectX left-handed system)
+    };
+
+    const XMVECTORF32 clrs[6] = {
+        DirectX::Colors::Red,
+        DirectX::Colors::Purple,
+        DirectX::Colors::Green,
+        DirectX::Colors::Yellow,
+        DirectX::Colors::Blue,
+        DirectX::Colors::Cyan
+    };
+
+    // Set rendering parameters
+    UINT stride = sizeof(VertexPositionColorNormal);
+    UINT offset = 0;
+    context->IASetVertexBuffers(0, 1, vertexBuffer.GetAddressOf(), &stride, &offset);
+    context->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    context->IASetInputLayout(m_inputLayout.Get());
+
+    context->OMSetRenderTargets(1, rt.renderTargetView.GetAddressOf(), nullptr);
+    context->RSSetViewports(1, &viewport);
+
+    context->PSSetShader(pixelShader.Get(), nullptr, 0);
+    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
+    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+
+    context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+
+    context->PSSetShaderResources(0, 1, m_loadedSkyTextureSRV.GetAddressOf());
+
+    // Render each face
+    auto renderFace = [&](int i, ComPtr<ID3D11Texture2D> targetCubeMapTexture)
+    {
+        // Set camera look at
+        cubeMapCamera.SetLookAtPos(lookAt[i]);
+        XMStoreFloat4x4(
+            &m_constantBufferData.view,
+            XMMatrixTranspose(cubeMapCamera.GetViewMatrix())
+        );
+
+        // Set full-screen quad rotation
+        XMStoreFloat4x4(&m_constantBufferData.model, rotations[i]);
+
+        // Send constant buffer data to GPU
+        context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL,
+            &m_constantBufferData, 0, 0);
+
+        // Render full-screen quad
+        context->ClearRenderTargetView(rt.renderTargetView.Get(), clrs[i]);
+        context->DrawIndexed((UINT)indices.size(), 0, 0);
+
+        // Copy render target contents to cube map
+        context->CopySubresourceRegion(
+            targetCubeMapTexture.Get(), i,
+            0, 0, 0,
+            rt.texture.Get(), 0,
+            nullptr
+        );
+    };
+
+    for (int i = 0; i < 6; i++)
+        renderFace(i, m_skyCubeMap);
+
+    // Create shader resource view
+    D3D11_SHADER_RESOURCE_VIEW_DESC desc =  CD3D11_SHADER_RESOURCE_VIEW_DESC(
+        m_skyCubeMap.Get(),
+        D3D11_SRV_DIMENSION_TEXTURECUBE,
+        cubeMapDesc.Format,
+        0,
+        1
+    );
+
+    m_skyMapSRV = m_deviceResources->createShaderResourceView(
+        m_skyCubeMap,
+        "SkyMap",
+        &desc
+    );
+
+    annotation->EndEvent(); // RenderSkyMap
+
+    annotation->BeginEvent(L"RenderIrradianceMap");
+    static const UINT IRR_FACE_SIZE = 32;
+
+    // Load irradiance pixel shader
+    pixelShader = m_deviceResources->createPixelShader("IrradianceMap");
+
+    // Create irradiance cubemap texture
+    CD3D11_TEXTURE2D_DESC irrCubeMapDesc(
+        DXGI_FORMAT_R32G32B32A32_FLOAT,
+        IRR_FACE_SIZE,
+        IRR_FACE_SIZE,
+        6, // Six textures for faces.
+        1, // Use a single mipmap level.
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
+        D3D11_USAGE_DEFAULT, 0, 1, 0,
+        D3D11_RESOURCE_MISC_TEXTURECUBE
+    );
+    m_irradianceCubeMap = m_deviceResources->createTexture2D(irrCubeMapDesc, "IrradianceCubeMap");
+
+    // Create face-sized render target
+    rt =  m_deviceResources->createRenderTargetTexture(
+        { IRR_FACE_SIZE, IRR_FACE_SIZE }, "IrradianceMapRenderTexture"
+    );
+    viewport = CD3D11_VIEWPORT(0.0f, 0.0f, IRR_FACE_SIZE, IRR_FACE_SIZE);
+
+    // Set rendering parameters
+    context->OMSetRenderTargets(1, rt.renderTargetView.GetAddressOf(), nullptr);
+    context->RSSetViewports(1, &viewport);
+    context->PSSetShader(pixelShader.Get(), nullptr, 0);
+    context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
+
+    // Render each face
+    for (int i = 0; i < 6; i++)
+        renderFace(i, m_irradianceCubeMap);
+
+    // Create shader resource view
+    m_irradianceMapSRV = m_deviceResources->createShaderResourceView(
+        m_irradianceCubeMap,
+        "IrradianceMap",
+        &desc
+    );
+
+    annotation->EndEvent(); // RenderIrradianceMap
+
+    // Restore main camera matrices
+    XMStoreFloat4x4(
+        &m_constantBufferData.view,
+        XMMatrixTranspose(m_camera->GetViewMatrix())
+    );
+    XMStoreFloat4x4(
+        &m_constantBufferData.projection,
+        XMMatrixTranspose(m_camera->GetProjectionMatrix())
+    );
 }

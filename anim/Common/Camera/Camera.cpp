@@ -120,20 +120,10 @@ void Camera::SetLookAtPos(const DirectX::XMFLOAT3& lookAtPos)
     lookAtPosCopy.y = m_pos.y - lookAtPos.y;
     lookAtPosCopy.z = m_pos.z - lookAtPos.z;
 
-    float pitch = 0.0f;
-    if (lookAtPosCopy.y != 0.0f)
-    {
-        const float distance = sqrt(lookAtPosCopy.x * lookAtPosCopy.x + lookAtPosCopy.z * lookAtPosCopy.z);
-        pitch = atan(lookAtPosCopy.y / distance);
-    }
+    const float distance = sqrt(lookAtPosCopy.x * lookAtPosCopy.x + lookAtPosCopy.z * lookAtPosCopy.z);
+    float pitch = atan2(lookAtPosCopy.y, distance);
 
-    float yaw = 0.0f;
-    if (lookAtPosCopy.x != 0.0f)
-    {
-        yaw = atan(lookAtPosCopy.x / lookAtPosCopy.z);
-    }
-    if (lookAtPosCopy.z > 0)
-        yaw += XM_PI;
+    float yaw = -atan2(lookAtPosCopy.x, -lookAtPosCopy.z);
 
     SetRotation(pitch, yaw, 0.0f);
 }

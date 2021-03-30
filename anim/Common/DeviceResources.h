@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "DirectXHelper.h"
+
 namespace DX
 {
     struct Size
@@ -35,6 +37,15 @@ namespace DX
         }
     };
 
+    struct RenderTargetTexture
+    {
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> renderTargetView;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shaderResourceView;
+        D3D11_VIEWPORT viewport;
+        CD3D11_TEXTURE2D_DESC textureDesc;
+    };
+
     // Controls all the DirectX device resources.
     class DeviceResources
     {
@@ -44,10 +55,52 @@ namespace DX
         void SetLogicalSize(Size logicalSize);
         void Present();
 
+        // Create texture of given size and bind it as render target and shader resource
+        RenderTargetTexture createRenderTargetTexture(const Size &size,
+            const std::string &namePrefix) const;
+
         Microsoft::WRL::ComPtr<ID3D11PixelShader> createPixelShader(
             const std::string &namePrefix) const;
         Microsoft::WRL::ComPtr<ID3D11VertexShader> createVertexShader(
             const std::string &namePrefix) const;
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> createTexture2D(
+            const D3D11_TEXTURE2D_DESC &desc, const std::string &namePrefix,
+            const D3D11_SUBRESOURCE_DATA *initData = nullptr) const;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> createShaderResourceView(
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture,
+            const std::string &namePrefix,
+            const D3D11_SHADER_RESOURCE_VIEW_DESC *desc = nullptr) const;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> createRenderTargetView(
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture,
+            const std::string &namePrefix) const;
+
+        Microsoft::WRL::ComPtr<ID3D11Buffer> createIndexBuffer(
+            const std::vector<unsigned short> &indices,
+            const std::string &namePrefix) const;
+
+        template <typename Vertex>
+        Microsoft::WRL::ComPtr<ID3D11Buffer> createVertexBuffer(
+            const std::vector<Vertex> &vertices,
+            const std::string &namePrefix) const
+        {
+            Microsoft::WRL::ComPtr<ID3D11Buffer> vertexBuffer;
+  
+            CD3D11_BUFFER_DESC vertexBufferDesc(
+                (UINT)vertices.size() * sizeof(Vertex),
+                D3D11_BIND_VERTEX_BUFFER
+            );
+
+            D3D11_SUBRESOURCE_DATA vertexBufferData = { 0 };
+            vertexBufferData.pSysMem = vertices.data();
+
+            ThrowIfFailed(
+                m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &vertexBuffer)
+            );
+            SetName(vertexBuffer, namePrefix + "VertexBuffer");
+
+            return vertexBuffer;
+        }
 
         // The size of the render target, in dips.
         Size GetLogicalSize() const { return m_logicalSize; }
