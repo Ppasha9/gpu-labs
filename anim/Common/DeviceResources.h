@@ -57,7 +57,7 @@ namespace DX
 
         // Create texture of given size and bind it as render target and shader resource
         RenderTargetTexture createRenderTargetTexture(const Size &size,
-            const std::string &namePrefix) const;
+            const std::string &namePrefix, UINT mipLevels = 1) const;
 
         Microsoft::WRL::ComPtr<ID3D11PixelShader> createPixelShader(
             const std::string &namePrefix) const;

@@ -141,7 +141,7 @@ void Sample3DSceneRenderer::Render()
     if (m_isDrawIrradiance)
         context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
     else
-        context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
+        context->PSSetShaderResources(0, 1, m_environmentMapSRV.GetAddressOf());
     context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
 
     // Set sky sphere geometry
@@ -471,22 +471,6 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     renderSkyMapTexture();
 }
 
-void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
-{
-    m_vertexShader.Reset();
-    m_inputLayout.Reset();
-    m_pixelShader.Reset();
-    m_normDistrPixelShader.Reset();
-    m_geomPixelShader.Reset();
-    m_fresnelPixelShader.Reset();
-    m_constantBuffer.Reset();
-    m_lightConstantBuffer.Reset();
-    m_materialConstantBuffer.Reset();
-    m_generalConstantBuffer.Reset();
-    m_vertexBuffer.Reset();
-    m_indexBuffer.Reset();
-}
-
 void Sample3DSceneRenderer::renderSkyMapTexture()
 {
     static const UINT FACE_SIZE = 512;
@@ -501,22 +485,24 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     ComPtr<ID3D11PixelShader> pixelShader = m_deviceResources->createPixelShader("Equidistant2CubeMap");
 
     // Create cubemap texture
-    CD3D11_TEXTURE2D_DESC cubeMapDesc(
+    CD3D11_TEXTURE2D_DESC environmentMapTextureDesc(
         DXGI_FORMAT_R32G32B32A32_FLOAT,
         FACE_SIZE,
         FACE_SIZE,
         6, // Six textures for faces.
-        1, // Use a single mipmap level.
+        10, // Use 10 mipmap levels.
         D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
         D3D11_USAGE_DEFAULT, 0, 1, 0,
         D3D11_RESOURCE_MISC_TEXTURECUBE
     );
-    m_skyCubeMap = m_deviceResources->createTexture2D(cubeMapDesc, "SkyCubeMap");
+    m_environmentMap = m_deviceResources->createTexture2D(environmentMapTextureDesc, "EnvironmentMap");
 
     // Create face-sized render target
     DX::RenderTargetTexture rt =
         m_deviceResources->createRenderTargetTexture(
-            { FACE_SIZE, FACE_SIZE }, "CubeMapRenderTexture"
+            { FACE_SIZE, FACE_SIZE },
+            "EnvironmentMapRenderTexture",
+            environmentMapTextureDesc.MipLevels
         );
     D3D11_VIEWPORT viewport = CD3D11_VIEWPORT(0.0f, 0.0f, FACE_SIZE, FACE_SIZE);
 
@@ -599,7 +585,7 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     context->PSSetShaderResources(0, 1, m_loadedSkyTextureSRV.GetAddressOf());
 
     // Render each face
-    auto renderFace = [&](int i, ComPtr<ID3D11Texture2D> targetCubeMapTexture)
+    auto renderFace = [&](int i, ComPtr<ID3D11Texture2D> targetCubeMapTexture, UINT mipLevels)
     {
         // Set camera look at
         cubeMapCamera.SetLookAtPos(lookAt[i]);
@@ -619,30 +605,33 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
         context->ClearRenderTargetView(rt.renderTargetView.Get(), clrs[i]);
         context->DrawIndexed((UINT)indices.size(), 0, 0);
 
+        // Generate mip levels
+        context->GenerateMips(rt.shaderResourceView.Get());
+
         // Copy render target contents to cube map
-        context->CopySubresourceRegion(
-            targetCubeMapTexture.Get(), i,
-            0, 0, 0,
-            rt.texture.Get(), 0,
-            nullptr
-        );
+        for (UINT mip = 0; mip < mipLevels; mip++)
+            context->CopySubresourceRegion(
+                targetCubeMapTexture.Get(), i * mipLevels + mip,
+                0, 0, 0,
+                rt.texture.Get(), mip,
+                nullptr
+            );
     };
 
     for (int i = 0; i < 6; i++)
-        renderFace(i, m_skyCubeMap);
+        renderFace(i, m_environmentMap, environmentMapTextureDesc.MipLevels);
 
     // Create shader resource view
     D3D11_SHADER_RESOURCE_VIEW_DESC desc =  CD3D11_SHADER_RESOURCE_VIEW_DESC(
-        m_skyCubeMap.Get(),
+        m_environmentMap.Get(),
         D3D11_SRV_DIMENSION_TEXTURECUBE,
-        cubeMapDesc.Format,
+        environmentMapTextureDesc.Format,
         0,
         1
     );
-
-    m_skyMapSRV = m_deviceResources->createShaderResourceView(
-        m_skyCubeMap,
-        "SkyMap",
+    m_environmentMapSRV = m_deviceResources->createShaderResourceView(
+        m_environmentMap,
+        "EnvironmentMap",
         &desc
     );
 
@@ -655,7 +644,7 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     pixelShader = m_deviceResources->createPixelShader("IrradianceMap");
 
     // Create irradiance cubemap texture
-    CD3D11_TEXTURE2D_DESC irrCubeMapDesc(
+    CD3D11_TEXTURE2D_DESC irradianceMapTextureDesc(
         DXGI_FORMAT_R32G32B32A32_FLOAT,
         IRR_FACE_SIZE,
         IRR_FACE_SIZE,
@@ -665,7 +654,7 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
         D3D11_USAGE_DEFAULT, 0, 1, 0,
         D3D11_RESOURCE_MISC_TEXTURECUBE
     );
-    m_irradianceCubeMap = m_deviceResources->createTexture2D(irrCubeMapDesc, "IrradianceCubeMap");
+    m_irradianceMap = m_deviceResources->createTexture2D(irradianceMapTextureDesc, "IrradianceMap");
 
     // Create face-sized render target
     rt =  m_deviceResources->createRenderTargetTexture(
@@ -677,15 +666,15 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     context->OMSetRenderTargets(1, rt.renderTargetView.GetAddressOf(), nullptr);
     context->RSSetViewports(1, &viewport);
     context->PSSetShader(pixelShader.Get(), nullptr, 0);
-    context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
+    context->PSSetShaderResources(0, 1, m_environmentMapSRV.GetAddressOf());
 
     // Render each face
     for (int i = 0; i < 6; i++)
-        renderFace(i, m_irradianceCubeMap);
+        renderFace(i, m_irradianceMap, irradianceMapTextureDesc.MipLevels);
 
     // Create shader resource view
     m_irradianceMapSRV = m_deviceResources->createShaderResourceView(
-        m_irradianceCubeMap,
+        m_irradianceMap,
         "IrradianceMap",
         &desc
     );

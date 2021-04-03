@@ -18,7 +18,6 @@ namespace anim
             const std::shared_ptr<input::Keyboard>& keyboard);
         void CreateDeviceDependentResources();
         void CreateWindowSizeDependentResources();
-        void ReleaseDeviceDependentResources();
         void Update(DX::StepTimer const& timer);
         void Render();
 
@@ -38,8 +37,9 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_skySphereVertexBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_indexBuffer;
 
-        Microsoft::WRL::ComPtr<ID3D11Texture2D>    m_skyCubeMap;
-        Microsoft::WRL::ComPtr<ID3D11Texture2D>    m_irradianceCubeMap;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D>    m_environmentMap;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D>    m_irradianceMap;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D>    m_prefilteredColorMap;
 
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
         Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pixelShader;
@@ -59,8 +59,9 @@ namespace anim
         Microsoft::WRL::ComPtr<ID3D11Buffer>       m_generalConstantBuffer;
 
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_loadedSkyTextureSRV;
-        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_skyMapSRV;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_environmentMapSRV;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_irradianceMapSRV;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_prefilteredColorMapSRV;
 
         ModelViewProjectionConstantBuffer    m_constantBufferData;
         MaterialConstantBuffer               m_materialConstantBufferData;

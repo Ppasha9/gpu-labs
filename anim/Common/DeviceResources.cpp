@@ -476,7 +476,7 @@ Microsoft::WRL::ComPtr<ID3D11Buffer> DX::DeviceResources::createIndexBuffer(
 }
 
 DX::RenderTargetTexture DX::DeviceResources::createRenderTargetTexture(
-    const DX::Size &size, const std::string &namePrefix) const
+    const DX::Size &size, const std::string &namePrefix, UINT mipLevels) const
 {
     RenderTargetTexture output;
 
@@ -492,8 +492,10 @@ DX::RenderTargetTexture DX::DeviceResources::createRenderTargetTexture(
         lround(size.width),
         lround(size.height),
         1, // Only one texture.
-        1, // Use a single mipmap level.
-        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE
+        mipLevels,
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
+        D3D11_USAGE_DEFAULT, 0, 1, 0,
+        D3D11_RESOURCE_MISC_GENERATE_MIPS
     );
 
     output.texture = createTexture2D(output.textureDesc, namePrefix);
