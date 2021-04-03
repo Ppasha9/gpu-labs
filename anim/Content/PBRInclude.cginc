@@ -53,10 +53,15 @@ float3 h(float3 wi, float3 wo)
     return normalize(wi + wo);
 }
 
-float normalDistribution(float3 n, float3 wi, float3 wo)
+float normalDistributionH(float3 n, float3 h)
 {
     float roughSqr = sqr(max(roughness, 0.01f));
-    return roughSqr / (PI * sqr(sqr(myDot(n, h(wi, wo))) * (roughSqr - 1) + 1));
+    return roughSqr / (PI * sqr(sqr(myDot(n, h)) * (roughSqr - 1) + 1));
+}
+
+float normalDistribution(float3 n, float3 wi, float3 wo)
+{
+    return normalDistributionH(n, h(wi, wo));
 }
 
 float SchlickGGX(float3 n, float3 v, float k)
