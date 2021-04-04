@@ -191,8 +191,11 @@ void Sample3DSceneRenderer::Render()
         context->PSSetShader(m_fresnelPixelShader.Get(), nullptr, 0);
         break;
     }
-    // Bind irradiance map
+
+    // Bind IBL textures
     context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
+    context->PSSetShaderResources(1, 1, m_prefilteredColorMapSRV.GetAddressOf());
+    context->PSSetShaderResources(2, 1, m_preintegratedBRDFSRV.GetAddressOf());
 
     static const int sphereGridSize = 10;
     static const float gridWidth = 5;
@@ -511,9 +514,9 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     static const std::vector<VertexPositionColorNormal> vertices(
         {
             { { -0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
-            { {  0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
-            { {  0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
-            { { -0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} }
+            { {  0.5f,  0.5f, -0.5f }, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { {  0.5f, -0.5f, -0.5f }, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { { -0.5f, -0.5f, -0.5f }, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f} }
         }
     );
     static const std::vector<unsigned short> indices(
@@ -649,6 +652,35 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
         &envMapSRVDesc
     );
     annotation->EndEvent(); // RenderSkyMap
+
+    annotation->BeginEvent(L"RenderPreintegratedBRDF");
+    // Create preintegrated BRDF 2d texture
+    CD3D11_TEXTURE2D_DESC preintegrBRDFTextureDesc(
+        DXGI_FORMAT_R32G32B32A32_FLOAT,
+        FACE_SIZE,
+        FACE_SIZE,
+        1, // 1 texture.
+        1, // 1 mip level.
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE
+    );
+    m_preintegratedBRDF = m_deviceResources->createTexture2D(
+        preintegrBRDFTextureDesc,
+        "PreintegratedBRDF"
+    );
+
+    // Set pixel shader
+    pixelShader = m_deviceResources->createPixelShader("PreintegratedBRDF");
+    context->PSSetShader(pixelShader.Get(), nullptr, 0);
+
+    // Render quad
+    renderFace(0, m_preintegratedBRDF, false);
+
+    // Create shader resource view
+    m_preintegratedBRDFSRV = m_deviceResources->createShaderResourceView(
+        m_preintegratedBRDF,
+        "PreintegratedBRDF"
+    );
+    annotation->EndEvent(); // RenderPreintegratedBRDF
 
     annotation->BeginEvent(L"RenderIrradianceMap");
     static const UINT IRR_FACE_SIZE = 32;
