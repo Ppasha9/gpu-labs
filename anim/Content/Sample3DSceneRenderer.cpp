@@ -97,6 +97,11 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
         m_shaderMode = PBRShaderMode::FRESNEL;
     if (m_keyboard->KeyWasReleased('7'))
         m_isDrawIrradiance = !m_isDrawIrradiance;
+    if (m_keyboard->KeyWasReleased('8'))
+    {
+        m_isTestEnvironment = !m_isTestEnvironment;
+        renderSkyMapTexture();
+    }
 
     // Update the view matrix, cause it can be changed by input
     XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
@@ -139,11 +144,10 @@ void Sample3DSceneRenderer::Render()
     context->PSSetShader(m_skySpherePixelShader.Get(), nullptr, 0);
 
     if (m_isDrawIrradiance)
-        ///context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
-        context->PSSetShaderResources(0, 1, m_prefilteredColorMapSRV.GetAddressOf());
+        context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
     else
         context->PSSetShaderResources(0, 1, m_environmentMapSRV.GetAddressOf());
-    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
+    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerStateClamp());
 
     // Set sky sphere geometry
     context->IASetVertexBuffers(0, 1, m_skySphereVertexBuffer.GetAddressOf(), &stride, &offset);
@@ -581,7 +585,7 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     context->RSSetViewports(1, &viewport);
 
     context->PSSetShader(pixelShader.Get(), nullptr, 0);
-    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
+    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerStateWrap());
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 
     context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
@@ -608,7 +612,8 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
 
         // Render full-screen quad
         context->ClearRenderTargetView(rt.renderTargetView.Get(), clrs[i]);
-        context->DrawIndexed((UINT)indices.size(), 0, 0);
+        if (!m_isTestEnvironment || targetCubeMapTexture != m_environmentMap)
+            context->DrawIndexed((UINT)indices.size(), 0, 0);
 
         // Copy render target contents to cube map
         D3D11_TEXTURE2D_DESC desc;

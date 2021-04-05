@@ -166,7 +166,7 @@ void AnimMain::copyTexture(const DX::RenderTargetTexture &source,
 
     // Render full-screen quad
     context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
+    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerStateWrap());
     context->Draw(4, 0);
 }
 

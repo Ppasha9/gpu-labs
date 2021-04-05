@@ -80,6 +80,7 @@ namespace anim
         } m_shaderMode;
 
         bool m_isDrawIrradiance = false;
+        bool m_isTestEnvironment = false;
 
         // Lights information
         LightConstantBuffer                  m_lightConstantBufferData;

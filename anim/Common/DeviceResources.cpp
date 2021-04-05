@@ -167,7 +167,13 @@ void DX::DeviceResources::CreateDeviceResources()
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
 
     DX::ThrowIfFailed(
-        m_d3dDevice->CreateSamplerState(&samplerDesc, &m_samplerState)
+        m_d3dDevice->CreateSamplerState(&samplerDesc, &m_samplerStateWrap)
+    );
+
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    DX::ThrowIfFailed(
+        m_d3dDevice->CreateSamplerState(&samplerDesc, &m_samplerStateClamp)
     );
 }
 
