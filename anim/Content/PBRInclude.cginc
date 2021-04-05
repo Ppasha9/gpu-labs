@@ -1,4 +1,7 @@
-TextureCube irradianceMap;
+TextureCube irradianceMap : register(t0);
+TextureCube prefilteredColorMap : register(t1);
+Texture2D preintegratedBRDF : register(t2);
+
 SamplerState samplerState;
 
 static const float PI = 3.14159265359f;
@@ -53,10 +56,15 @@ float3 h(float3 wi, float3 wo)
     return normalize(wi + wo);
 }
 
-float normalDistribution(float3 n, float3 wi, float3 wo)
+float normalDistributionH(float3 n, float3 h)
 {
     float roughSqr = sqr(max(roughness, 0.01f));
-    return roughSqr / (PI * sqr(sqr(myDot(n, h(wi, wo))) * (roughSqr - 1) + 1));
+    return roughSqr / (PI * sqr(sqr(myDot(n, h)) * (roughSqr - 1) + 1));
+}
+
+float normalDistribution(float3 n, float3 wi, float3 wo)
+{
+    return normalDistributionH(n, h(wi, wo));
 }
 
 float SchlickGGX(float3 n, float3 v, float k)
@@ -77,25 +85,40 @@ float3 fresnel(float3 n, float3 wi, float3 wo)
     return (F0 + (1 - F0) * pow(1 - myDot(h(wi, wo), wo), 5)) * sign(myDot(wi, n));
 }
 
+float3 f0()
+{
+    return lerp(float3(0.04f, 0.04f, 0.04f), albedo, metalness);
+}
+
 float3 fresnelEnvironment(float3 n, float3 wo)
 {
-    float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metalness);
+    float3 F0 = f0();
     return (F0 + (max(1 - roughness, F0) - F0) * pow(1 - myDot(n, wo), 5));
 }
 
 float3 ambient(float3 n, float3 wo)
 {
+    // specular
+    float3 r = 2 * myDot(n, wo) * n - wo;
+    static const float MAX_REFLECTION_LOD = 4.0;
+    float3 prefilteredColor = prefilteredColorMap.SampleLevel(samplerState, r, roughness * MAX_REFLECTION_LOD).rgb;
+
+    float2 envBRDF = preintegratedBRDF.Sample(samplerState, float2(dot(n, wo), roughness)).xy;
+    float3 specular = prefilteredColor * (f0() * envBRDF.x + envBRDF.y);
+
+    // diffused
+    float3 irradiance = irradianceMap.Sample(samplerState, n).rgb;
+    float3 diffuse = irradiance * albedo;
+
     float3 F = fresnelEnvironment(n, wo);
     float3 kS = F; // reflected
     float3 kD = float3(1.0f, 1.0f, 1.0f) - kS; // diffused
     kD *= 1.0f - metalness;
-    float3 irradiance = irradianceMap.Sample(samplerState, n).rgb;
-    float3 diffuse = irradiance * albedo;
 
-    return kD * diffuse;
+    return kD * diffuse + specular;
 }
 
-float3 cookTorranceBRDF(float3 p, float3 n, float3 wi, float3 wo)
+float3 cookTorranceBRDF(float3 n, float3 wi, float3 wo)
 {
     float D = normalDistribution(n, wi, wo);
     float G = geometry(n, wi, wo);
@@ -120,7 +143,7 @@ float3 toLight(int lightIdx, float3 p)
 float3 Lo(int lightIdx, float3 p, float3 n, float3 wo)
 {
     float3 wi = toLight(lightIdx, p);
-    return cookTorranceBRDF(p, n, wi, wo) * Li(lightIdx, p) * myDot(wi, n);
+    return cookTorranceBRDF(n, wi, wo) * Li(lightIdx, p) * myDot(wi, n);
 }
 
 float3 toCamera(float3 worldPos)

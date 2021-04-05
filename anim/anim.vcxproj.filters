@@ -34,6 +34,9 @@
     <Filter Include="Source Files\Content\Sky sphere">
       <UniqueIdentifier>{a04ce0a0-7387-4254-88e1-e0e762e2638f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Content\PBR\IBL">
+      <UniqueIdentifier>{623b502f-11ca-44ca-ba26-ccbcf42d84e7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common\DeviceResources.h">
@@ -169,11 +172,17 @@
     <FxCompile Include="Content\SkySpherePixelShader.hlsl">
       <Filter>Source Files\Content\Sky sphere</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Equidistant2CubeMapPixelShader.hlsl">
-      <Filter>Source Files\Content</Filter>
-    </FxCompile>
     <FxCompile Include="Content\IrradianceMapPixelShader.hlsl">
-      <Filter>Source Files\Content</Filter>
+      <Filter>Source Files\Content\PBR\IBL</Filter>
+    </FxCompile>
+    <FxCompile Include="content\PrefilteredColorMapPixelShader.hlsl">
+      <Filter>Source Files\Content\PBR\IBL</Filter>
+    </FxCompile>
+    <FxCompile Include="content\PreintegratedBRDFPixelShader.hlsl">
+      <Filter>Source Files\Content\PBR\IBL</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Equidistant2CubeMapPixelShader.hlsl">
+      <Filter>Source Files\Content\PBR\IBL</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
@@ -182,6 +191,9 @@
     </None>
     <None Include="Content\PBRInclude.cginc">
       <Filter>Source Files\Content\PBR</Filter>
+    </None>
+    <None Include="content\ImportanceSample.cginc">
+      <Filter>Source Files\Content\PBR\IBL</Filter>
     </None>
   </ItemGroup>
 </Project>

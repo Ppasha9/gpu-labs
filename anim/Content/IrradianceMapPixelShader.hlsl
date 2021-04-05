@@ -1,4 +1,4 @@
-TextureCube skyMap;
+TextureCube environmentMap;
 SamplerState samplerState;
 
 struct PixelShaderInput
@@ -10,8 +10,8 @@ struct PixelShaderInput
 };
 
 static const float PI = 3.14159265359f;
-#define N1 600
-#define N2 150
+static const int N1 = 600;
+static const int N2 = 150;
 
 float4 main(PixelShaderInput input) : SV_TARGET
 {
@@ -20,7 +20,8 @@ float4 main(PixelShaderInput input) : SV_TARGET
     float3 normal = normalize(input.worldPos);
     normal.z = -normal.z;
 
-    float3 dir = abs(normal.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+    //float3 dir = abs(normal.z) < 0.999f ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+    float3 dir = float3(0.0, 0.0, 1.0);
     float3 tangent = normalize(cross(dir, normal));
     float3 bitangent = cross(normal, tangent);
     for (int i = 0; i < N1; i++)
@@ -40,7 +41,7 @@ float4 main(PixelShaderInput input) : SV_TARGET
                 tangentSample.y * bitangent +
                 tangentSample.z * normal;
 
-            irradiance += skyMap.Sample(samplerState, sampleVec).rgb * cos(theta) * sin(theta);
+            irradiance += environmentMap.Sample(samplerState, sampleVec).rgb * cos(theta) * sin(theta);
         }
     }
 

@@ -97,6 +97,11 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
         m_shaderMode = PBRShaderMode::FRESNEL;
     if (m_keyboard->KeyWasReleased('7'))
         m_isDrawIrradiance = !m_isDrawIrradiance;
+    if (m_keyboard->KeyWasReleased('8'))
+    {
+        m_isTestEnvironment = !m_isTestEnvironment;
+        renderSkyMapTexture();
+    }
 
     // Update the view matrix, cause it can be changed by input
     XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
@@ -141,8 +146,8 @@ void Sample3DSceneRenderer::Render()
     if (m_isDrawIrradiance)
         context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
     else
-        context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
-    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
+        context->PSSetShaderResources(0, 1, m_environmentMapSRV.GetAddressOf());
+    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerStateClamp());
 
     // Set sky sphere geometry
     context->IASetVertexBuffers(0, 1, m_skySphereVertexBuffer.GetAddressOf(), &stride, &offset);
@@ -190,8 +195,11 @@ void Sample3DSceneRenderer::Render()
         context->PSSetShader(m_fresnelPixelShader.Get(), nullptr, 0);
         break;
     }
-    // Bind irradiance map
+
+    // Bind IBL textures
     context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
+    context->PSSetShaderResources(1, 1, m_prefilteredColorMapSRV.GetAddressOf());
+    context->PSSetShaderResources(2, 1, m_preintegratedBRDFSRV.GetAddressOf());
 
     static const int sphereGridSize = 10;
     static const float gridWidth = 5;
@@ -471,22 +479,6 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     renderSkyMapTexture();
 }
 
-void Sample3DSceneRenderer::ReleaseDeviceDependentResources()
-{
-    m_vertexShader.Reset();
-    m_inputLayout.Reset();
-    m_pixelShader.Reset();
-    m_normDistrPixelShader.Reset();
-    m_geomPixelShader.Reset();
-    m_fresnelPixelShader.Reset();
-    m_constantBuffer.Reset();
-    m_lightConstantBuffer.Reset();
-    m_materialConstantBuffer.Reset();
-    m_generalConstantBuffer.Reset();
-    m_vertexBuffer.Reset();
-    m_indexBuffer.Reset();
-}
-
 void Sample3DSceneRenderer::renderSkyMapTexture()
 {
     static const UINT FACE_SIZE = 512;
@@ -501,22 +493,24 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     ComPtr<ID3D11PixelShader> pixelShader = m_deviceResources->createPixelShader("Equidistant2CubeMap");
 
     // Create cubemap texture
-    CD3D11_TEXTURE2D_DESC cubeMapDesc(
+    CD3D11_TEXTURE2D_DESC environmentMapTextureDesc(
         DXGI_FORMAT_R32G32B32A32_FLOAT,
         FACE_SIZE,
         FACE_SIZE,
         6, // Six textures for faces.
-        1, // Use a single mipmap level.
+        10, // Use 10 mipmap levels.
         D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
         D3D11_USAGE_DEFAULT, 0, 1, 0,
         D3D11_RESOURCE_MISC_TEXTURECUBE
     );
-    m_skyCubeMap = m_deviceResources->createTexture2D(cubeMapDesc, "SkyCubeMap");
+    m_environmentMap = m_deviceResources->createTexture2D(environmentMapTextureDesc, "EnvironmentMap");
 
     // Create face-sized render target
     DX::RenderTargetTexture rt =
         m_deviceResources->createRenderTargetTexture(
-            { FACE_SIZE, FACE_SIZE }, "CubeMapRenderTexture"
+            { FACE_SIZE, FACE_SIZE },
+            "EnvironmentMapRenderTexture",
+            environmentMapTextureDesc.MipLevels
         );
     D3D11_VIEWPORT viewport = CD3D11_VIEWPORT(0.0f, 0.0f, FACE_SIZE, FACE_SIZE);
 
@@ -524,9 +518,9 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     static const std::vector<VertexPositionColorNormal> vertices(
         {
             { { -0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
-            { {  0.5f,  0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
-            { {  0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
-            { { -0.5f, -0.5f, -0.5f }, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} }
+            { {  0.5f,  0.5f, -0.5f }, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { {  0.5f, -0.5f, -0.5f }, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+            { { -0.5f, -0.5f, -0.5f }, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f} }
         }
     );
     static const std::vector<unsigned short> indices(
@@ -591,7 +585,7 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     context->RSSetViewports(1, &viewport);
 
     context->PSSetShader(pixelShader.Get(), nullptr, 0);
-    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerState());
+    context->PSSetSamplers(0, 1, m_deviceResources->GetSamplerStateWrap());
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 
     context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
@@ -599,7 +593,8 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     context->PSSetShaderResources(0, 1, m_loadedSkyTextureSRV.GetAddressOf());
 
     // Render each face
-    auto renderFace = [&](int i, ComPtr<ID3D11Texture2D> targetCubeMapTexture)
+    auto renderFace = [&](UINT i, ComPtr<ID3D11Texture2D> targetCubeMapTexture,
+        bool autoGenerateMips, UINT curMip = 0)
     {
         // Set camera look at
         cubeMapCamera.SetLookAtPos(lookAt[i]);
@@ -617,36 +612,80 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
 
         // Render full-screen quad
         context->ClearRenderTargetView(rt.renderTargetView.Get(), clrs[i]);
-        context->DrawIndexed((UINT)indices.size(), 0, 0);
+        if (!m_isTestEnvironment || targetCubeMapTexture != m_environmentMap)
+            context->DrawIndexed((UINT)indices.size(), 0, 0);
 
         // Copy render target contents to cube map
-        context->CopySubresourceRegion(
-            targetCubeMapTexture.Get(), i,
-            0, 0, 0,
-            rt.texture.Get(), 0,
-            nullptr
-        );
+        D3D11_TEXTURE2D_DESC desc;
+        targetCubeMapTexture->GetDesc(&desc);
+        if (autoGenerateMips)
+        {
+            // Generate mip levels
+            context->GenerateMips(rt.shaderResourceView.Get());
+            // Copy each mip level
+            for (UINT mip = 0; mip < desc.MipLevels; mip++)
+                context->CopySubresourceRegion(
+                    targetCubeMapTexture.Get(), i * desc.MipLevels + mip,
+                    0, 0, 0,
+                    rt.texture.Get(), mip,
+                    nullptr
+                );
+        }
+        else
+            // Copy from render target to given current mip level
+            context->CopySubresourceRegion(
+                targetCubeMapTexture.Get(), i * desc.MipLevels + curMip,
+                0, 0, 0,
+                rt.texture.Get(), 0,
+                nullptr
+            );
     };
 
-    for (int i = 0; i < 6; i++)
-        renderFace(i, m_skyCubeMap);
+    for (UINT i = 0; i < 6; i++)
+        renderFace(i, m_environmentMap, true);
 
     // Create shader resource view
-    D3D11_SHADER_RESOURCE_VIEW_DESC desc =  CD3D11_SHADER_RESOURCE_VIEW_DESC(
-        m_skyCubeMap.Get(),
-        D3D11_SRV_DIMENSION_TEXTURECUBE,
-        cubeMapDesc.Format,
-        0,
-        1
-    );
+    D3D11_SHADER_RESOURCE_VIEW_DESC envMapSRVDesc;
+    envMapSRVDesc.Format = environmentMapTextureDesc.Format;
+    envMapSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+    envMapSRVDesc.TextureCube.MipLevels = environmentMapTextureDesc.MipLevels;
+    envMapSRVDesc.TextureCube.MostDetailedMip = 0;
 
-    m_skyMapSRV = m_deviceResources->createShaderResourceView(
-        m_skyCubeMap,
-        "SkyMap",
-        &desc
+    m_environmentMapSRV = m_deviceResources->createShaderResourceView(
+        m_environmentMap,
+        "EnvironmentMap",
+        &envMapSRVDesc
     );
-
     annotation->EndEvent(); // RenderSkyMap
+
+    annotation->BeginEvent(L"RenderPreintegratedBRDF");
+    // Create preintegrated BRDF 2d texture
+    CD3D11_TEXTURE2D_DESC preintegrBRDFTextureDesc(
+        DXGI_FORMAT_R32G32B32A32_FLOAT,
+        FACE_SIZE,
+        FACE_SIZE,
+        1, // 1 texture.
+        1, // 1 mip level.
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE
+    );
+    m_preintegratedBRDF = m_deviceResources->createTexture2D(
+        preintegrBRDFTextureDesc,
+        "PreintegratedBRDF"
+    );
+
+    // Set pixel shader
+    pixelShader = m_deviceResources->createPixelShader("PreintegratedBRDF");
+    context->PSSetShader(pixelShader.Get(), nullptr, 0);
+
+    // Render quad
+    renderFace(0, m_preintegratedBRDF, false);
+
+    // Create shader resource view
+    m_preintegratedBRDFSRV = m_deviceResources->createShaderResourceView(
+        m_preintegratedBRDF,
+        "PreintegratedBRDF"
+    );
+    annotation->EndEvent(); // RenderPreintegratedBRDF
 
     annotation->BeginEvent(L"RenderIrradianceMap");
     static const UINT IRR_FACE_SIZE = 32;
@@ -655,7 +694,7 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     pixelShader = m_deviceResources->createPixelShader("IrradianceMap");
 
     // Create irradiance cubemap texture
-    CD3D11_TEXTURE2D_DESC irrCubeMapDesc(
+    CD3D11_TEXTURE2D_DESC irradianceMapTextureDesc(
         DXGI_FORMAT_R32G32B32A32_FLOAT,
         IRR_FACE_SIZE,
         IRR_FACE_SIZE,
@@ -665,7 +704,7 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
         D3D11_USAGE_DEFAULT, 0, 1, 0,
         D3D11_RESOURCE_MISC_TEXTURECUBE
     );
-    m_irradianceCubeMap = m_deviceResources->createTexture2D(irrCubeMapDesc, "IrradianceCubeMap");
+    m_irradianceMap = m_deviceResources->createTexture2D(irradianceMapTextureDesc, "IrradianceMap");
 
     // Create face-sized render target
     rt =  m_deviceResources->createRenderTargetTexture(
@@ -677,20 +716,86 @@ void Sample3DSceneRenderer::renderSkyMapTexture()
     context->OMSetRenderTargets(1, rt.renderTargetView.GetAddressOf(), nullptr);
     context->RSSetViewports(1, &viewport);
     context->PSSetShader(pixelShader.Get(), nullptr, 0);
-    context->PSSetShaderResources(0, 1, m_skyMapSRV.GetAddressOf());
+    context->PSSetShaderResources(0, 1, m_environmentMapSRV.GetAddressOf());
 
     // Render each face
-    for (int i = 0; i < 6; i++)
-        renderFace(i, m_irradianceCubeMap);
+    for (UINT i = 0; i < 6; i++)
+        renderFace(i, m_irradianceMap, false);
 
     // Create shader resource view
+    D3D11_SHADER_RESOURCE_VIEW_DESC irrMapSRVDesc;
+    irrMapSRVDesc.Format = irradianceMapTextureDesc.Format;
+    irrMapSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+    irrMapSRVDesc.TextureCube.MipLevels = irradianceMapTextureDesc.MipLevels;
+    irrMapSRVDesc.TextureCube.MostDetailedMip = 0;
+
     m_irradianceMapSRV = m_deviceResources->createShaderResourceView(
-        m_irradianceCubeMap,
+        m_irradianceMap,
         "IrradianceMap",
-        &desc
+        &irrMapSRVDesc
+    );
+    annotation->EndEvent(); // RenderIrradianceMap
+
+    annotation->BeginEvent(L"RenderPrefilteredColorMap");
+    const float ROUGHNESS[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
+    const UINT PREFILT_CLR_FACE_SIZE = 128;
+
+    // Create prefiltered color cubemap texture
+    CD3D11_TEXTURE2D_DESC prefilteredColorMapTextureDesc(
+        DXGI_FORMAT_R32G32B32A32_FLOAT,
+        PREFILT_CLR_FACE_SIZE,
+        PREFILT_CLR_FACE_SIZE,
+        6, // Six textures for faces.
+        ARRAYSIZE(ROUGHNESS), // Mipmap level for each roughness value.
+        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
+        D3D11_USAGE_DEFAULT, 0, 1, 0,
+        D3D11_RESOURCE_MISC_TEXTURECUBE
+    );
+    m_prefilteredColorMap = m_deviceResources->createTexture2D(
+        prefilteredColorMapTextureDesc,
+        "PrefilteredColorMap"
     );
 
-    annotation->EndEvent(); // RenderIrradianceMap
+    // Set pixel shader
+    pixelShader = m_deviceResources->createPixelShader("PrefilteredColorMap");
+    context->PSSetShader(pixelShader.Get(), nullptr, 0);
+    context->PSSetShaderResources(0, 1, m_environmentMapSRV.GetAddressOf());
+
+    // Render prefiltered color map for each roughness value
+    for (UINT mip = 0; mip < ARRAYSIZE(ROUGHNESS); mip++)
+    {
+        // Create face-sized render target
+        const float SIZE = (float)(PREFILT_CLR_FACE_SIZE >> mip);
+        rt = m_deviceResources->createRenderTargetTexture(
+            { SIZE, SIZE }, "PrefilteredColorMapRenderTexture" + mip
+        );
+        viewport = CD3D11_VIEWPORT(0.0f, 0.0f, SIZE, SIZE);
+
+        // Set render target and viewport
+        context->OMSetRenderTargets(1, rt.renderTargetView.GetAddressOf(), nullptr);
+        context->RSSetViewports(1, &viewport);
+
+        // Send roughness value to GPU via material
+        SetMaterial({ XMFLOAT3(1, 1, 1), ROUGHNESS[mip] });
+
+        // Render each face
+        for (UINT i = 0; i < 6; i++)
+            renderFace(i, m_prefilteredColorMap, false, mip);
+    }
+
+    // Create shader resource view
+    D3D11_SHADER_RESOURCE_VIEW_DESC prfClrMapSRVDesc;
+    prfClrMapSRVDesc.Format = prefilteredColorMapTextureDesc.Format;
+    prfClrMapSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+    prfClrMapSRVDesc.TextureCube.MipLevels = prefilteredColorMapTextureDesc.MipLevels;
+    prfClrMapSRVDesc.TextureCube.MostDetailedMip = 0;
+
+    m_prefilteredColorMapSRV = m_deviceResources->createShaderResourceView(
+        m_prefilteredColorMap,
+        "PrefilteredColorMap",
+        &prfClrMapSRVDesc
+    );
+    annotation->EndEvent(); // RenderPrefilteredColorMap
 
     // Restore main camera matrices
     XMStoreFloat4x4(
