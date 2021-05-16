@@ -5,6 +5,7 @@
 #include "..\Common\DeviceResources.h"
 #include "..\Common\StepTimer.h"
 #include "ShaderStructures.h"
+#include "..\Common\GeomModel\GeomModel.h"
 
 namespace anim
 {
@@ -70,6 +71,9 @@ namespace anim
         GeneralConstantBuffer                m_generalConstantBufferData;
 
         size_t                               m_indexCount;
+
+        GeomModel*                           m_geomModel;
+        bool                                 m_isGeomModelRendering = false;
 
         enum struct PBRShaderMode
         {

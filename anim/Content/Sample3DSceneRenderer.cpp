@@ -1,4 +1,5 @@
 ﻿#include "pch.h"
+//#include "../pch.h"
 
 #include "Sample3DSceneRenderer.h"
 #include "WICTextureLoader.h"
@@ -6,7 +7,6 @@
 #include "..\Common\DirectXHelper.h"
 #include "..\Common\StepTimer.h"
 
-#define STB_IMAGE_IMPLEMENTATION
 #include "..\Common\stb_image.h"
 
 using namespace anim;
@@ -103,6 +103,9 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
         renderSkyMapTexture();
     }
 
+    if (m_keyboard->KeyWasReleased('M'))
+        m_isGeomModelRendering = !m_isGeomModelRendering;
+
     // Update the view matrix, cause it can be changed by input
     XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(m_camera->GetViewMatrix()));
 
@@ -173,65 +176,85 @@ void Sample3DSceneRenderer::Render()
     );
     annotation->EndEvent(); // RenderSkySphere
 
-    annotation->BeginEvent(L"RenderSphereGrid");
+    if (!m_isGeomModelRendering) {
+        annotation->BeginEvent(L"RenderSphereGrid");
 
-    // Set sphere geometry
-    context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
-    // Attach our vertex shader.
-    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
-    // Attach our pixel shader.
-    switch (m_shaderMode)
-    {
-    case PBRShaderMode::REGULAR:
-        context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
-        break;
-    case PBRShaderMode::NORMAL_DISTRIBUTION:
-        context->PSSetShader(m_normDistrPixelShader.Get(), nullptr, 0);
-        break;
-    case PBRShaderMode::GEOMETRY:
-        context->PSSetShader(m_geomPixelShader.Get(), nullptr, 0);
-        break;
-    case PBRShaderMode::FRESNEL:
-        context->PSSetShader(m_fresnelPixelShader.Get(), nullptr, 0);
-        break;
-    }
-
-    // Bind IBL textures
-    context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
-    context->PSSetShaderResources(1, 1, m_prefilteredColorMapSRV.GetAddressOf());
-    context->PSSetShaderResources(2, 1, m_preintegratedBRDFSRV.GetAddressOf());
-
-    static const int sphereGridSize = 10;
-    static const float gridWidth = 5;
-    for (int i = 0; i < sphereGridSize; i++)
-        for (int j = 0; j < sphereGridSize; j++)
+        // Set sphere geometry
+        context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
+        // Attach our vertex shader.
+        context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+        // Attach our pixel shader.
+        switch (m_shaderMode)
         {
-            XMStoreFloat4x4(
-                &m_constantBufferData.model,
-                XMMatrixTranspose(XMMatrixTranslation(
-                    gridWidth * (i / (sphereGridSize - 1.0f) - 0.5f),
-                    gridWidth * (j / (sphereGridSize - 1.0f) - 0.5f),
-                    0
-                ))
-            );
-            context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL, &m_constantBufferData, 0, 0);
-
-            SetMaterial(
-                {
-                    XMFLOAT3(1, 1, 1),
-                    i / (sphereGridSize - 1.0f),
-                    j / (sphereGridSize - 1.0f)
-                }
-            );
-
-            context->DrawIndexed(
-                (UINT)m_indexCount,
-                0,
-                0
-            );
+        case PBRShaderMode::REGULAR:
+            context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+            break;
+        case PBRShaderMode::NORMAL_DISTRIBUTION:
+            context->PSSetShader(m_normDistrPixelShader.Get(), nullptr, 0);
+            break;
+        case PBRShaderMode::GEOMETRY:
+            context->PSSetShader(m_geomPixelShader.Get(), nullptr, 0);
+            break;
+        case PBRShaderMode::FRESNEL:
+            context->PSSetShader(m_fresnelPixelShader.Get(), nullptr, 0);
+            break;
         }
 
-    annotation->EndEvent();
+        // Bind IBL textures
+        context->PSSetShaderResources(0, 1, m_irradianceMapSRV.GetAddressOf());
+        context->PSSetShaderResources(1, 1, m_prefilteredColorMapSRV.GetAddressOf());
+        context->PSSetShaderResources(2, 1, m_preintegratedBRDFSRV.GetAddressOf());
+
+        static const int sphereGridSize = 10;
+        static const float gridWidth = 5;
+        for (int i = 0; i < sphereGridSize; i++)
+            for (int j = 0; j < sphereGridSize; j++)
+            {
+                XMStoreFloat4x4(
+                    &m_constantBufferData.model,
+                    XMMatrixTranspose(XMMatrixTranslation(
+                        gridWidth * (i / (sphereGridSize - 1.0f) - 0.5f),
+                        gridWidth * (j / (sphereGridSize - 1.0f) - 0.5f),
+                        0
+                    ))
+                );
+                context->UpdateSubresource(m_constantBuffer.Get(), 0, NULL, &m_constantBufferData, 0, 0);
+
+                SetMaterial(
+                    {
+                        XMFLOAT3(1, 1, 1),
+                        i / (sphereGridSize - 1.0f),
+                        j / (sphereGridSize - 1.0f)
+                    }
+                );
+
+                context->DrawIndexed(
+                    (UINT)m_indexCount,
+                    0,
+                    0
+                );
+            }
+
+        annotation->EndEvent();
+    } else {
+        m_geomModel->Render(
+            m_deviceResources,
+            m_constantBufferData, m_constantBuffer.Get(),
+            m_lightConstantBufferData, m_lightConstantBuffer.Get(),
+            m_generalConstantBufferData, m_generalConstantBuffer.Get(),
+            m_irradianceMapSRV.Get(), m_prefilteredColorMapSRV.Get(), m_preintegratedBRDFSRV.Get());
+
+        m_geomModel->RenderTransparent(
+            m_deviceResources,
+            m_constantBufferData, m_constantBuffer.Get(),
+            m_lightConstantBufferData, m_lightConstantBuffer.Get(),
+            m_generalConstantBufferData, m_generalConstantBuffer.Get(),
+            m_irradianceMapSRV.Get(), m_prefilteredColorMapSRV.Get(), m_preintegratedBRDFSRV.Get(),
+            m_camera->GetForwardVector());
+
+        ID3D11ShaderResourceView* nullsrv[] = { nullptr };
+        context->PSSetShaderResources(0, 1, nullsrv);
+    }
 }
 
 void Sample3DSceneRenderer::CreateDeviceDependentResources()
@@ -477,6 +500,9 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
     }
 
     renderSkyMapTexture();
+
+    m_geomModel = new GeomModel("Porsche_911_Turbo\\scene.gltf", "Porsche_911_Turbo");
+    m_geomModel->CreateDeviceDependentResources(m_deviceResources);
 }
 
 void Sample3DSceneRenderer::renderSkyMapTexture()

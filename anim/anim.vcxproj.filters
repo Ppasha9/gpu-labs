@@ -87,6 +87,21 @@
     <ClInclude Include="Common\stb_image.h">
       <Filter>Source Files\Common</Filter>
     </ClInclude>
+    <ClInclude Include="Common\tiny_gltf.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\json.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\stb_image_write.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\GeomModel\GeomModel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Utils\Utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common\DeviceResources.cpp">
@@ -127,6 +142,12 @@
     </ClCompile>
     <ClCompile Include="Content\WICTextureLoader.cpp">
       <Filter>Source Files\Common\WIC Texture Loader</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\GeomModel\GeomModel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\Utils\Utils.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -184,6 +205,9 @@
     <FxCompile Include="Content\Equidistant2CubeMapPixelShader.hlsl">
       <Filter>Source Files\Content\PBR\IBL</Filter>
     </FxCompile>
+    <FxCompile Include="Content\GeomModelShaders.fx" />
+    <FxCompile Include="Content\GeomModelVertexShader.hlsl" />
+    <FxCompile Include="Content\GeomModelPixelShader.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Content\noiseSimplex.cginc">
