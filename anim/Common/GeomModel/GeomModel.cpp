@@ -198,8 +198,7 @@ HRESULT GeomModel::CreateMaterials (const std::shared_ptr<DX::DeviceResources>& 
             }
         }
 
-        D3D11_RASTERIZER_DESC rasterizerDsc;
-        ZeroMemory(&rasterizerDsc, sizeof(rasterizerDsc));
+        D3D11_RASTERIZER_DESC rasterizerDsc = {};
         rasterizerDsc.FillMode = D3D11_FILL_SOLID;
         if (gltfMaterial.doubleSided) {
             rasterizerDsc.CullMode = D3D11_CULL_NONE;
@@ -224,30 +223,28 @@ HRESULT GeomModel::CreateMaterials (const std::shared_ptr<DX::DeviceResources>& 
         material.materialBufferData.roughness = static_cast<float>(gltfMaterial.pbrMetallicRoughness.roughnessFactor);
         material.materialBufferData.metalness = static_cast<float>(gltfMaterial.pbrMetallicRoughness.metallicFactor);
 
-        std::vector<D3D_SHADER_MACRO> defines;
-
         material.baseColorTexture = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index;
         if (material.baseColorTexture >= 0) {
-            defines.push_back({"HAS_BASE_COLOR_TEXTURE", "True"});
+            material.defines.push_back({"HAS_BASE_COLOR_TEXTURE", "True"});
         }
 
         material.metallicRoughnessTexture = gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
         if (material.metallicRoughnessTexture >= 0) {
-            defines.push_back({ "HAS_METALLIC_ROUGHNESS_TEXTURE", "True" });
+            material.defines.push_back({ "HAS_METALLIC_ROUGHNESS_TEXTURE", "True" });
         }
 
         material.normalTexture = gltfMaterial.normalTexture.index;
         if (material.normalTexture >= 0) {
-            defines.push_back({ "HAS_NORMAL_TEXTURE", "True" });
+            material.defines.push_back({ "HAS_NORMAL_TEXTURE", "True" });
         }
 
         if (gltfMaterial.occlusionTexture.index >= 0) {
-            defines.push_back({"HAS_OCCLUSION_TEXTURE", "True"});
+            material.defines.push_back({"HAS_OCCLUSION_TEXTURE", "True"});
         }
 
-        defines.push_back({ nullptr, nullptr });
+        material.defines.push_back({ nullptr, nullptr });
 
-        hr = CreateShaders(deviceResources, defines.data(), &material.pVertexShader, &material.pPixelShader, &material.pInputLayout);
+        hr = CreateShaders(deviceResources, material.defines.data(), &material.pVertexShader, &material.pPixelShader, &material.pInputLayout);
         if (FAILED(hr)) {
             return hr;
         }
@@ -280,7 +277,8 @@ HRESULT GeomModel::CreateShaders (const std::shared_ptr<DX::DeviceResources>& de
     {
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD_", 0, DXGI_FORMAT_R32G32_FLOAT, 2, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+        { "TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD_", 0, DXGI_FORMAT_R32G32_FLOAT, 3, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
     };
 
     hr = deviceResources->GetD3DDevice()->CreateInputLayout(layout, ARRAYSIZE(layout), blob->GetBufferPointer(), blob->GetBufferSize(), il);
@@ -307,7 +305,7 @@ HRESULT GeomModel::CreatePrimitives (const std::shared_ptr<DX::DeviceResources>&
 {
     Scene& gltfScene = model.scenes[model.defaultScene];
 
-    m_worldMatricies.push_back(DirectX::XMMatrixIdentity());
+    m_worldMatricies.push_back(DirectX::XMMatrixScaling(0.01, 0.01, 0.01));
 
     for (int nodeIndex : gltfScene.nodes) {
         HRESULT hr = ProcessNode(deviceResources, model, model.nodes[nodeIndex], m_worldMatricies[0]);
@@ -379,6 +377,7 @@ HRESULT GeomModel::ProcessNode (const std::shared_ptr<DX::DeviceResources>& devi
 HRESULT GeomModel::CreatePrimitive (const std::shared_ptr<DX::DeviceResources>& deviceResources, Model& model, Primitive& gltfPrimitive, size_t matrixIndex)
 {
     GeomPrimitive primitive = {};
+    primitive.matrix = static_cast<UINT>(matrixIndex);
 
     for (std::pair<const std::string, int>& prAttribute : gltfPrimitive.attributes) {
         if (prAttribute.first == "TEXCOORD_1") {
@@ -467,8 +466,6 @@ HRESULT GeomModel::CreatePrimitive (const std::shared_ptr<DX::DeviceResources>& 
     }
 
     primitive.material = gltfPrimitive.material;
-    primitive.matrix = static_cast<UINT>(matrixIndex);
-
     if (m_materials[primitive.material].blend) {
         m_transparentPrimitives.push_back(primitive);
     } else {
@@ -536,7 +533,7 @@ void GeomModel::RenderTransparent (
     std::vector<std::pair<float, size_t>> distances;
     float distance;
     DirectX::XMVECTOR center;
-    DirectX::XMFLOAT4 cameraPosFloat4 = DirectX::XMFLOAT4(generalData.cameraPos.x, generalData.cameraPos.y, generalData.cameraPos.z, 1.0f);
+    DirectX::XMFLOAT4 cameraPosFloat4 = DirectX::XMFLOAT4(generalData.cameraPos.x, generalData.cameraPos.y, generalData.cameraPos.z, 0.0f);
     DirectX::XMVECTOR cameraPos = DirectX::XMLoadFloat4(&cameraPosFloat4);
     for (size_t i = 0; i < m_transparentPrimitives.size(); ++i) {
         center = DirectX::XMVectorDivide(DirectX::XMVectorAdd(m_transparentPrimitives[i].max, m_transparentPrimitives[i].min), DirectX::XMVectorReplicate(2));

@@ -45,6 +45,8 @@ private:
         int metallicRoughnessTexture;
         int normalTexture;
 
+        std::vector<D3D_SHADER_MACRO> defines;
+
         anim::GeomModelMaterialConstantBuffer materialBufferData;
     };
 

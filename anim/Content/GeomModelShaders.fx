@@ -22,6 +22,7 @@ struct VertexShaderInput
 {
     float3 normal : NORMAL;
     float3 pos : POSITION;
+    float4 tangent : TANGENT;
     float2 tex : TEXCOORD_0;
 };
 
@@ -31,6 +32,7 @@ struct PixelShaderInput
     float2 tex : TEXCOORD_0;
     float3 normal : NORMAL;
     float3 worldPos : WORLD_POSITION;
+    float3 tangent : TANGENT;
 };
 
 cbuffer ModelViewProjectionConstantBuffer : register(b0)
@@ -65,6 +67,8 @@ float4 getAlbedo(float2 uv)
     float4 res = albedo;
 #ifdef HAS_BASE_COLOR_TEXTURE
     res *= diffuseTexture.Sample(ModelSampler, uv);
+#else
+    res = pow(res, 2.2f);
 #endif
 #ifdef HAS_OCCLUSION_TEXTURE
     res.xyz *= metallicRoughnessTexture.Sample(ModelSampler, uv).r;
@@ -208,6 +212,10 @@ PixelShaderInput vs_main(VertexShaderInput input)
 
     output.tex = input.tex;
 
+    output.tangent = input.tangent.xyz;
+    if (length(input.tangent.xyz) > 0)
+        output.tangent = normalize(mul(input.tangent.xyz, (float3x3)model));
+
     return output;
 }
 
@@ -218,8 +226,12 @@ float4 ps_main(PixelShaderInput input) : SV_TARGET
     float3 n = normalize(input.normal);
 
 #ifdef HAS_NORMAL_TEXTURE
-    float3 scaledNormal = normalize(normalTexture.Sample(ModelSampler, input.tex).xyz * 2.0 - 1.0);
-    n = scaledNormal;
+    float3 nm = (normalTexture.Sample(ModelSampler, input.tex) * 2.0f - 1.0f).xyz;
+    float3 tangent = input.tangent;
+    if (length(input.tangent) > 0)
+        tangent = normalize(input.tangent);
+    float3 binormal = cross(n, tangent);
+    n = normalize(nm.x * tangent + nm.y * binormal + n);
 #endif
 
     float2 material = getMetalnessRoughness(input.tex);

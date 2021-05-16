@@ -244,6 +244,7 @@ void Sample3DSceneRenderer::Render()
             m_generalConstantBufferData, m_generalConstantBuffer.Get(),
             m_irradianceMapSRV.Get(), m_prefilteredColorMapSRV.Get(), m_preintegratedBRDFSRV.Get());
 
+        //context->OMSetDepthStencilState(m_deviceResources->GetDepthStencilState(), 0);
         m_geomModel->RenderTransparent(
             m_deviceResources,
             m_constantBufferData, m_constantBuffer.Get(),
@@ -501,7 +502,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
     renderSkyMapTexture();
 
-    m_geomModel = new GeomModel("Porsche_911_Turbo\\scene.gltf", "Porsche_911_Turbo");
+    m_geomModel = new GeomModel("car_scene\\scene.gltf", "car_scene");
     m_geomModel->CreateDeviceDependentResources(m_deviceResources);
 }
 
