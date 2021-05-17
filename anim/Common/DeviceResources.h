@@ -112,7 +112,6 @@ namespace DX
         D3D_FEATURE_LEVEL            GetDeviceFeatureLevel() const         { return m_d3dFeatureLevel; }
         ID3D11RenderTargetView*      GetBackBufferRenderTargetView() const { return m_d3dRenderTargetView.Get(); }
         ID3D11DepthStencilView*      GetDepthStencilView() const           { return m_d3dDepthStencilView.Get(); }
-        ID3D11DepthStencilState*     GetDepthStencilState() const          { return m_d3dDepthStencilState.Get(); }
         D3D11_VIEWPORT               GetScreenViewport() const             { return m_screenViewport; }
         ID3DUserDefinedAnnotation*   GetAnnotation() const                 { return m_annotation.Get(); }
         ID3D11SamplerState * const * GetSamplerStateWrap() const           { return m_samplerStateWrap.GetAddressOf(); }
@@ -140,7 +139,6 @@ namespace DX
         // Direct3D rendering objects. Required for 3D.
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView>  m_d3dRenderTargetView;
         Microsoft::WRL::ComPtr<ID3D11DepthStencilView>  m_d3dDepthStencilView;
-        Microsoft::WRL::ComPtr<ID3D11DepthStencilState> m_d3dDepthStencilState;
         D3D11_VIEWPORT                                  m_screenViewport;
         Microsoft::WRL::ComPtr<ID3D11SamplerState>      m_samplerStateWrap;
         Microsoft::WRL::ComPtr<ID3D11SamplerState>      m_samplerStateClamp;

@@ -1,5 +1,4 @@
-﻿//#include "../pch.h"
-#include "pch.h"
+﻿#include "pch.h"
 
 #include "DeviceResources.h"
 #include "roapi.h"
@@ -275,20 +274,6 @@ void DX::DeviceResources::CreateWindowSizeDependentResources()
             &m_d3dDepthStencilView
             )
         );
-
-    // Create a depth stencil state for rendering transparent objects
-    CD3D11_DEPTH_STENCIL_DESC depthStencilStateDesc;
-    ZeroMemory(&depthStencilStateDesc, sizeof(depthStencilStateDesc));
-    depthStencilStateDesc.DepthEnable = TRUE;
-    depthStencilStateDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-    depthStencilStateDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
-    depthStencilStateDesc.StencilEnable = FALSE;
-    DX::ThrowIfFailed(
-        m_d3dDevice->CreateDepthStencilState(
-            &depthStencilStateDesc,
-            &m_d3dDepthStencilState
-        )
-    );
 
     // Set the 3D rendering viewport to target the entire window.
     m_screenViewport = CD3D11_VIEWPORT(

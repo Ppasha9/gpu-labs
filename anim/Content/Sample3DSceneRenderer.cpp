@@ -1,5 +1,4 @@
 ﻿#include "pch.h"
-//#include "../pch.h"
 
 #include "Sample3DSceneRenderer.h"
 #include "WICTextureLoader.h"
