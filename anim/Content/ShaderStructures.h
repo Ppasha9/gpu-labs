@@ -34,6 +34,14 @@ namespace anim
         float dummy[3];
     };
 
+    struct GeomModelMaterialConstantBuffer
+    {
+        DirectX::XMFLOAT4 albedo;
+        float roughness;
+        float metalness;
+        float dummy[2];
+    };
+
     struct GeneralConstantBuffer
     {
         DirectX::XMFLOAT3 cameraPos;
