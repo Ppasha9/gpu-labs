@@ -242,14 +242,6 @@ void Sample3DSceneRenderer::Render()
             m_constantBufferData, m_constantBuffer.Get(),
             m_lightConstantBufferData, m_lightConstantBuffer.Get(),
             m_generalConstantBufferData, m_generalConstantBuffer.Get(),
-            m_irradianceMapSRV.Get(), m_prefilteredColorMapSRV.Get(), m_preintegratedBRDFSRV.Get());
-
-        //context->OMSetDepthStencilState(m_deviceResources->GetDepthStencilState(), 0);
-        m_geomModel->RenderTransparent(
-            m_deviceResources,
-            m_constantBufferData, m_constantBuffer.Get(),
-            m_lightConstantBufferData, m_lightConstantBuffer.Get(),
-            m_generalConstantBufferData, m_generalConstantBuffer.Get(),
             m_irradianceMapSRV.Get(), m_prefilteredColorMapSRV.Get(), m_preintegratedBRDFSRV.Get(),
             m_camera->GetForwardVector());
 

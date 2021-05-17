@@ -476,12 +476,19 @@ HRESULT GeomModel::CreatePrimitive (const std::shared_ptr<DX::DeviceResources>& 
 }
 
 
+static bool CompareDistancePairs(const std::pair<float, size_t>& p1, const std::pair<float, size_t>& p2)
+{
+    return p1.first < p2.first;
+}
+
+
 void GeomModel::Render (
     std::shared_ptr<DX::DeviceResources>& deviceResources,
     anim::ModelViewProjectionConstantBuffer& cameraData, ID3D11Buffer* cameraConstantBuffer,
     anim::LightConstantBuffer& lightData, ID3D11Buffer* lightConstantBuffer,
     anim::GeneralConstantBuffer& generalData, ID3D11Buffer* generalConstantBuffer,
-    ID3D11ShaderResourceView* irradianceMapSRV, ID3D11ShaderResourceView* prefilteredColorMapSRV, ID3D11ShaderResourceView* preintegratedBRDFSRV
+    ID3D11ShaderResourceView* irradianceMapSRV, ID3D11ShaderResourceView* prefilteredColorMapSRV, ID3D11ShaderResourceView* preintegratedBRDFSRV,
+    DirectX::XMVECTOR cameraDir
 )
 {
     ComPtr<ID3DUserDefinedAnnotation> annotation = deviceResources->GetAnnotation();
@@ -500,33 +507,8 @@ void GeomModel::Render (
     }
 
     annotation->EndEvent(); // Rendering model's non-transparent primitives
-}
 
-
-static bool CompareDistancePairs(const std::pair<float, size_t>& p1, const std::pair<float, size_t>& p2)
-{
-    return p1.first < p2.first;
-}
-
-
-void GeomModel::RenderTransparent (
-    std::shared_ptr<DX::DeviceResources>& deviceResources,
-    anim::ModelViewProjectionConstantBuffer& cameraData, ID3D11Buffer* cameraConstantBuffer,
-    anim::LightConstantBuffer& lightData, ID3D11Buffer* lightConstantBuffer,
-    anim::GeneralConstantBuffer& generalData, ID3D11Buffer* generalConstantBuffer,
-    ID3D11ShaderResourceView* irradianceMapSRV, ID3D11ShaderResourceView* prefilteredColorMapSRV, ID3D11ShaderResourceView* preintegratedBRDFSRV,
-    DirectX::XMVECTOR cameraDir
-)
-{
-    ComPtr<ID3DUserDefinedAnnotation> annotation = deviceResources->GetAnnotation();
     annotation->BeginEvent(L"Rendering model's transparent primitives");
-
-    ComPtr<ID3D11DeviceContext> context = deviceResources->GetD3DDeviceContext();
-    context->VSSetConstantBuffers(0, 1, &cameraConstantBuffer);
-    context->PSSetConstantBuffers(1, 1, &lightConstantBuffer);
-    context->PSSetConstantBuffers(2, 1, &generalConstantBuffer);
-    context->PSSetConstantBuffers(3, 1, m_geomMaterialMaterialConstantBuffer.GetAddressOf());
-    context->PSSetSamplers(2, 1, m_pSamplerState.GetAddressOf());
 
     DirectX::XMStoreFloat4x4(&cameraData.model, DirectX::XMMatrixIdentity());
 
@@ -547,7 +529,7 @@ void GeomModel::RenderTransparent (
         RenderPrimitive(m_transparentPrimitives[iter->second], deviceResources, cameraData, cameraConstantBuffer, lightData, lightConstantBuffer, generalData, generalConstantBuffer, irradianceMapSRV, prefilteredColorMapSRV, preintegratedBRDFSRV);
     }
 
-    annotation->EndEvent(); // Rendering model's transparent primitives
+    annotation->EndEvent();
 }
 
 

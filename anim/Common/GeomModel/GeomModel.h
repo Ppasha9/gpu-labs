@@ -18,13 +18,6 @@ public:
         anim::ModelViewProjectionConstantBuffer& cameraData, ID3D11Buffer* cameraConstantBuffer,
         anim::LightConstantBuffer& lightData, ID3D11Buffer* lightConstantBuffer,
         anim::GeneralConstantBuffer& generalData, ID3D11Buffer* generalConstantBuffer,
-        ID3D11ShaderResourceView* irradianceMapSRV, ID3D11ShaderResourceView* prefilteredColorMapSRV, ID3D11ShaderResourceView* preintegratedBRDFSRV);
-
-    void RenderTransparent (
-        std::shared_ptr<DX::DeviceResources>& deviceResources,
-        anim::ModelViewProjectionConstantBuffer& cameraData, ID3D11Buffer* cameraConstantBuffer,
-        anim::LightConstantBuffer& lightData, ID3D11Buffer* lightConstantBuffer,
-        anim::GeneralConstantBuffer& generalData, ID3D11Buffer* generalConstantBuffer,
         ID3D11ShaderResourceView* irradianceMapSRV, ID3D11ShaderResourceView* prefilteredColorMapSRV, ID3D11ShaderResourceView* preintegratedBRDFSRV,
         DirectX::XMVECTOR cameraDir);
 
